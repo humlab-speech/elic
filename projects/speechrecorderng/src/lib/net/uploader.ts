@@ -119,14 +119,17 @@ export interface ServerPersistable{
 export interface PersistedUploadEntry {
     idempotencyKey: string;
     url: string;
-    blob: Blob;
+    // audio payload; absent for a control request (prepare/concat), which persists its fields instead
+    blob?: Blob;
+    form?: Array<[string, string | Blob]>;
 }
 
 function isPersistedUploadEntry(value: unknown): value is PersistedUploadEntry {
     return value !== null && typeof value === 'object'
         && 'idempotencyKey' in value && typeof value.idempotencyKey === 'string'
         && 'url' in value && typeof value.url === 'string'
-        && 'blob' in value && value.blob instanceof Blob;
+        && (('blob' in value && value.blob instanceof Blob)
+            || ('form' in value && Array.isArray(value.form)));
 }
 
 export class Upload {
@@ -368,6 +371,11 @@ export class Uploader {
         this.uploadCfg = Object.assign({}, DEFAULT_UPLOAD_CONFIG, uploadCfg);
         if (this.uploadCfg.maxConcurrentUploads < 1) {
             this.uploadCfg.maxConcurrentUploads = 1;
+        }
+        // Eight attempts last about two minutes; a longer outage used to leave the queue FAILED with
+        // nothing to restart it. Coming back online retries what failed for want of a connection.
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', () => this.retryTransientFailedUploads());
         }
     }
 
@@ -649,19 +657,27 @@ export class Uploader {
         }
     }
 
-    // Persists the blob payload of an upload to IndexedDB so it can be re-queued
-    // after a page reload (see restorePersistedUploads). Only Blob payloads are
-    // persisted; FormData control requests (prepare/concat) are re-creatable.
+    // Persists an upload to IndexedDB so it can be re-queued after a page reload (see
+    // restorePersistedUploads): the Blob of an audio upload, or the fields of a FormData control
+    // request (prepare/concat).
     private persistUpload(ul: Upload): void {
-        if (!this.uploadCfg.persistQueue || !(ul.data instanceof Blob)) {
+        if (!this.uploadCfg.persistQueue) {
             return;
         }
+        const data = ul.data;
+        // The concat request must survive a reload as well as the chunks: without it the chunks
+        // are on the server and the recording is never published.
+        const fields: Array<[string, string | Blob]> = [];
+        if (!(data instanceof Blob)) {
+            data.forEach((value, name) => fields.push([name, value]));
+        }
+        const payload = data instanceof Blob ? {blob: data} : {form: fields};
         SprDb.prepare().subscribe({
             next: (db) => {
                 try {
                     const tr = db.transaction(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME, 'readwrite');
                     tr.objectStore(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME)
-                        .put({idempotencyKey: ul.idempotencyKey, url: ul.url, blob: ul.data});
+                        .put({idempotencyKey: ul.idempotencyKey, url: ul.url, ...payload});
                 } catch (err) {
                     SprLogger.error('Could not persist upload for later resume: ' + err);
                 }
@@ -708,7 +724,16 @@ export class Uploader {
                             if (Array.isArray(entries)) {
                                 for (const entry of entries) {
                                     if (isPersistedUploadEntry(entry)) {
-                                        this.queueUpload(new Upload(entry.blob, entry.url, null, entry.idempotencyKey));
+                                        let data: Blob | FormData;
+                                        if (entry.blob instanceof Blob) {
+                                            data = entry.blob;
+                                        } else {
+                                            data = new FormData();
+                                            for (const [name, value] of entry.form ?? []) {
+                                                data.append(name, value);
+                                            }
+                                        }
+                                        this.queueUpload(new Upload(data, entry.url, null, entry.idempotencyKey));
                                         restored++;
                                     }
                                 }
@@ -728,6 +753,23 @@ export class Uploader {
                 }
             });
         });
+    }
+
+    // Retries the uploads that gave up after repeated transient errors (network, 408/425/429/5xx).
+    // A terminal answer (4xx) stays failed: asking again cannot change it.
+    retryTransientFailedUploads():void {
+        let retried = false;
+        for (let ul of this.que) {
+            if (ul.status === UploadStatus.FAILED && ul.lastError && !ul.lastError.terminal) {
+                ul.status = UploadStatus.IDLE;
+                ul.attemptCount = 0;
+                ul.lastError = null;
+                retried = true;
+            }
+        }
+        if (retried) {
+            this.process();
+        }
     }
 
     retryFailedUploads():void {

@@ -1147,6 +1147,7 @@ export class AudioRecorder extends BasicRecorder implements OnInit,AfterViewInit
     if(this.uploadSet){
       this.uploadSet.add(ulh);
     }
+    const rf = this._recordingFile;
     const chunkBaseUrl = this.sessionsBaseUrl() + '/' + encodeURIComponent(this.session?.sessionId ?? '') + '/' + RECFILE_API_CTX + '/' + encodeURIComponent(this.rfUuid ?? '');
     if (this.config?.uploadConfig?.checkStoredChunkBeforeUpload===true) {
       this.recFileService.chunkStoredRequest(chunkBaseUrl, chunkIdx).subscribe({
@@ -1158,23 +1159,24 @@ export class AudioRecorder extends BasicRecorder implements OnInit,AfterViewInit
             skipUl.succeeded();
             this.processingRecording = false;
           } else {
-            this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh);
+            this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh, chunkBaseUrl, rf);
           }
         },
         error: () => {
           // stored check failed: fall back to a blind upload (the idempotency key still protects against duplicates)
-          this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh);
+          this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh, chunkBaseUrl, rf);
         }
       });
     } else {
-      this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh);
+      this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh, chunkBaseUrl, rf);
     }
   }
 
-  private encodeAndPostChunk(buffers: Array<Float32Array>, sampleRate: number, chunkIdx: number, ulh: UploadHolder): void {
+  private encodeAndPostChunk(buffers: Array<Float32Array>, sampleRate: number, chunkIdx: number, ulh: UploadHolder, chunkBaseUrl: string, rf: any): void {
     const ww = new WavWriter(this.project?.mediaStorageFormat?.audioEncoding===AudioStorageFormatEncoding.PCM_FLOAT,this.project?.mediaStorageFormat?.audioPCMsampleSizeInBits);
-    let recUrl: string = this.sessionsBaseUrl() + '/' + encodeURIComponent(this.session?.sessionId ?? '') + '/' + RECFILE_API_CTX + '/' + encodeURIComponent(this.rfUuid ?? '')+'/'+chunkIdx;
-    let rf=this._recordingFile;
+    // built from the URL captured when the chunk was handed over: after the stored-check GET the next
+    // take may already be running, and its uuid and item code must not receive this chunk
+    let recUrl: string = chunkBaseUrl+'/'+chunkIdx;
     const channels=buffers.length;
     const frameLength=channels>0?buffers[0].length:0;
     ww.writeAsyncPlanar(channels,sampleRate,frameLength,buffers, (wavFile) => {

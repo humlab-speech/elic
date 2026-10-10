@@ -354,6 +354,45 @@ describe('Uploader', () => {
         await clearPersistedQueue();
     });
 
+    it('persists a FormData control request and restores it with its fields', async () => {
+        await clearPersistedQueue();
+        const upl1 = uploader({persistQueue: true, maxAttempts: 1});
+        const form = new FormData();
+        form.append('uuid', 'u-1');
+        form.append('chunkCount', '3');
+        upl1.queueUpload(new Upload(form, '/api/concat'));
+        httpMock.expectOne('/api/concat').error(networkError());
+        await wait(50);
+        const upl2 = uploader({persistQueue: true});
+        await new Promise<void>((resolve) => {
+            upl2.restorePersistedUploads().subscribe({complete: () => resolve()});
+        });
+        const req = httpMock.expectOne('/api/concat');
+        const body = req.request.body as FormData;
+        expect(body.get('uuid')).toBe('u-1');
+        expect(body.get('chunkCount')).toBe('3');
+        req.flush({});
+        await wait(50);
+        await clearPersistedQueue();
+    });
+
+    it('retries uploads that gave up on transient errors, but not terminal ones', () => {
+        const upl = uploader({maxAttempts: 1});
+        const transient = new Upload(blob(10), '/api/transient');
+        const terminal = new Upload(blob(10), '/api/terminal');
+        upl.queueUpload(transient);
+        httpMock.expectOne('/api/transient').error(networkError());
+        upl.queueUpload(terminal);
+        httpMock.expectOne('/api/terminal').flush('gone', {status: 404, statusText: 'Not Found'});
+        expect(transient.status).toBe(UploadStatus.FAILED);
+        expect(terminal.status).toBe(UploadStatus.FAILED);
+        upl.retryTransientFailedUploads();
+        httpMock.expectOne('/api/transient').flush({});
+        httpMock.expectNone('/api/terminal');
+        expect(transient.status).toBe(UploadStatus.DONE);
+        expect(terminal.status).toBe(UploadStatus.FAILED);
+    });
+
     it('fires onDone assigned after complete() once all uploads are done (late assignment)', () => {
         const upl = uploader();
         const set = new UploadSet();

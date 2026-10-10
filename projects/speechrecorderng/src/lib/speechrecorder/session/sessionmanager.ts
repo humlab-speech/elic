@@ -1868,22 +1868,24 @@ export class SessionManager extends BasicRecorder implements AfterViewInit,OnDes
             skipUl.succeeded();
             this.processingRecording = false;
           } else {
-            this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh);
+            this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh, chunkBaseUrl);
           }
         },
         error: () => {
           // stored check failed: fall back to a blind upload (the idempotency key still protects against duplicates)
-          this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh);
+          this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh, chunkBaseUrl);
         }
       });
     } else {
-      this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh);
+      this.encodeAndPostChunk(buffers, sampleRate, chunkIdx, ulh, chunkBaseUrl);
     }
   }
 
-  private encodeAndPostChunk(buffers: Array<Float32Array>, sampleRate: number, chunkIdx: number, ulh: UploadHolder): void {
+  private encodeAndPostChunk(buffers: Array<Float32Array>, sampleRate: number, chunkIdx: number, ulh: UploadHolder, chunkBaseUrl: string): void {
     const ww = new WavWriter(this._clientMediaStorageFormat?.audioEncoding===AudioStorageFormatEncoding.PCM_FLOAT,this._clientMediaStorageFormat?.audioPCMsampleSizeInBits);
-    let recUrl: string = this.sessionsBaseUrl() + '/' + encodeURIComponent(this.session?.sessionId ?? '') + '/' + RECFILE_API_CTX + '/' + encodeURIComponent(this.promptItem.itemcode ?? '')+'/'+encodeURIComponent(this.rfUuid ?? '')+'/'+chunkIdx;
+    // built from the URL captured when the chunk was handed over: after the stored-check GET the next
+    // take may already be running, and its uuid and item code must not receive this chunk
+    let recUrl: string = chunkBaseUrl+'/'+chunkIdx;
     const channels=buffers.length;
     const frameLength=channels>0?buffers[0].length:0;
     ww.writeAsyncPlanar(channels,sampleRate,frameLength,buffers, (wavFile) => {
