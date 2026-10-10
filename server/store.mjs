@@ -344,7 +344,10 @@ export class Store {
    * cannot check anything, so the server checks when the session is created.
    */
   requireRecorderVersion(scriptId, floor = undefined) {
-    const required = floor === undefined ? (this.script(scriptId)?.minRecorderVersion ?? null) : floor;
+    // The floor is stamped on the version index and meta at publish; the document itself does not carry it.
+    const required = floor === undefined
+      ? (this.scriptMeta(String(scriptId))?.minRecorderVersion ?? this.script(scriptId)?.minRecorderVersion ?? null)
+      : floor;
     if (supportsRecorderVersion(required, this.recorderVersion)) {
       return;
     }

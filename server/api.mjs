@@ -326,6 +326,10 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
       // The fourth remembered write (§11.193). The recording, chunk and concat routes already took an
       // idempotency key; publish did not, so a lost response or a double submit froze a second version
       // carrying the same text — and versions are immutable and never pruned.
+      // The key names the draft's bytes and the note. Reverting the draft to bytes that were published
+      // before makes the same key again for a new intent, so a remembered answer is only a retry while
+      // it is still the latest version; otherwise the publish runs.
+      const stillLatest = (answer) => answer?.version === undefined || answer.version === (store.scriptMeta(scriptId)?.publishedVersion ?? 0);
       return await idempotent(req, res, `publish script ${scriptId}`, async () => {
         const body = await readJsonBody(req).catch(() => ({}));
         if (store.draftBytes(scriptId) === null) {
@@ -360,7 +364,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
             name: typeof value.name === 'string' && value.name.trim() !== '' ? value.name : null,
           }),
         };
-      });
+      }, {accept: stillLatest});
     }
 
     /** Serves one published version verbatim, with its own strong validator. */
@@ -1397,10 +1401,10 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
      * Replays the stored answer for a repeated `Idempotency-Key`. The payload of the first
      * attempt is already on disk, so answering again must not store it a second time.
      */
-    async function idempotent(req, res, note, produce) {
+    async function idempotent(req, res, note, produce, {accept = () => true} = {}) {
       const key = req.headers['idempotency-key'];
       const known = store.idempotencyLookup(key);
-      if (known !== null) {
+      if (known !== null && accept(JSON.parse(Buffer.from(known.body, 'base64').toString('utf8')))) {
         log(`replayed answer for idempotency key ${key} (${known.note})`);
         res.setHeader('Idempotency-Replayed', 'true');
         return await sendJson(res, known.status, JSON.parse(Buffer.from(known.body, 'base64').toString('utf8')));

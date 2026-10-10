@@ -135,7 +135,7 @@ export function validateScript(script, {lookupBank = null} = {}) {
       if (code === range.placeholder) {
         continue;
       }
-      const match = new RegExp(`^${range.prefix.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(\\d{3,})$`).exec(code);
+      const match = new RegExp(`^${range.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d{3,})$`).exec(code);
       if (match !== null && Number(match[1]) <= range.count) {
         add('E05', `${codePath}.itemcode`, `Itemcodes ${range.prefix}001–${range.prefix}${String(range.count).padStart(3, '0')} are reserved by the bank source at ${range.path}.`);
       }
