@@ -7,7 +7,7 @@ import {EDITOR_STRINGS} from '../editor-strings';
 import type {Draft, Finding, ValidationContext} from './types';
 import {filterOf, queryBank} from './filter';
 import {fillTemplate} from './interpolate';
-import {eachBankSource, eachItem, eachSection, isAudio, isObject, mediaitemsOf, trimmedCode} from './walk';
+import {eachBankSource, eachItem, eachListSource, eachSection, hasBankSource, isAudio, isObject, mediaitemsOf, trimmedCode} from './walk';
 
 const S = EDITOR_STRINGS.validation;
 
@@ -309,6 +309,116 @@ export function checkE11(draft: Draft): Finding[] {
   return findings;
 }
 
+/** E12 — a list source that is not named, does not exist or holds no lists; suspended when it cannot be read. */
+export function checkE12(draft: Draft, context: ValidationContext = {}): Finding[] {
+  const findings: Finding[] = [];
+  for (const ref of eachListSource(draft)) {
+    const path = `${ref.prefillPath}.source`;
+    if (typeof ref.source !== 'string' || ref.source.trim() === '') {
+      findings.push(error('E12', path, S.e12NoSource, 'focus'));
+      continue;
+    }
+    const view = context.listLookup?.(ref.source);
+    if (context.listLookup === undefined) {
+      continue;
+    }
+    if (view === undefined) {
+      findings.push({id: 'E12', severity: 'warning', path, message: S.e12Suspended, suspended: true});
+    } else if (view === null) {
+      findings.push(error('E12', path, fillTemplate(S.e12Missing, {listId: ref.source}), 'focus'));
+    } else if (view.lists.length === 0) {
+      findings.push(error('E12', path, fillTemplate(S.e12Empty, {listId: ref.source}), 'focus'));
+    }
+  }
+  return findings;
+}
+
+/** E13 — one prefill with both a list source and a bank source. */
+export function checkE13(draft: Draft): Finding[] {
+  const findings: Finding[] = [];
+  for (const {item, itemPath: path} of eachItem(draft)) {
+    const prefill = item['prefill'];
+    if (isObject(prefill) && prefill['source'] !== undefined && prefill['source'] !== null && hasBankSource(prefill)) {
+      findings.push(error('E13', `${path}.prefill`, S.e13, 'focus'));
+    }
+  }
+  return findings;
+}
+
+/** The format as a usable template, or null when it lacks `{n}`. */
+function usableFormat(format: unknown): string | null {
+  return typeof format === 'string' && format.includes('{n}') ? format : null;
+}
+
+/** E14 — an `itemcodeFormat` without `{n}`: every generated item would get the same code. */
+export function checkE14(draft: Draft): Finding[] {
+  const findings: Finding[] = [];
+  for (const ref of eachListSource(draft)) {
+    if (usableFormat(ref.format) === null) {
+      findings.push(error('E14', `${ref.prefillPath}.itemcodeFormat`, S.e14, 'focus'));
+    }
+  }
+  return findings;
+}
+
+/**
+ * E15 — the codes a list source generates (1…its longest list) meet a fixed itemcode, a bank range or
+ * another list source's codes. The longest list is the worst case: any draw can pick it.
+ */
+export function checkE15(draft: Draft, context: ValidationContext = {}): Finding[] {
+  const findings: Finding[] = [];
+  const lookup = context.listLookup;
+  if (lookup === undefined) {
+    return findings;
+  }
+  const claimed = new Map<string, string>();
+  for (const {item, itemPath: path} of eachItem(draft)) {
+    const code = trimmedCode(item);
+    const prefill = item['prefill'];
+    const isListSource = isObject(prefill) && prefill['source'] !== undefined && prefill['source'] !== null && !hasBankSource(prefill);
+    if (code !== '' && !isListSource && !(isObject(prefill) && hasBankSource(prefill))) {
+      claimed.set(code, path);
+    }
+  }
+  const ranges = reservedRanges(draft, []);
+  for (const ref of eachListSource(draft)) {
+    const format = usableFormat(ref.format);
+    const view = typeof ref.source === 'string' ? lookup(ref.source) : undefined;
+    if (format === null || view === null || view === undefined || view.lists.length === 0) {
+      continue;
+    }
+    const longest = Math.max(...view.lists.map((list) => list.entries));
+    const mine: string[] = [];
+    for (let n = 1; n <= longest; n++) {
+      mine.push(format.split('{n}').join(String(n)));
+    }
+    for (const code of mine) {
+      const other = claimed.get(code) ?? bankRangePath(ranges, code);
+      if (other !== undefined) {
+        findings.push(error('E15', `${ref.prefillPath}.itemcodeFormat`, fillTemplate(S.e15, {code, path: other})));
+        break;
+      }
+    }
+    for (const code of mine) {
+      if (!claimed.has(code)) {
+        claimed.set(code, ref.prefillPath);
+      }
+    }
+  }
+  return findings;
+}
+
+function bankRangePath(ranges: ReservedRange[], code: string): string | undefined {
+  for (const range of ranges) {
+    const escaped = range.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`^${escaped}(\\d{3,})$`).exec(code);
+    if (match !== null && Number(match[1]) <= range.count) {
+      return range.path;
+    }
+  }
+  return undefined;
+}
+
 /** Every error check, in catalogue order. */
 export function runErrorChecks(draft: Draft, context: ValidationContext = {}): Finding[] {
   return [
@@ -323,5 +433,9 @@ export function runErrorChecks(draft: Draft, context: ValidationContext = {}): F
     ...checkE09(draft),
     ...checkE10(draft),
     ...checkE11(draft),
+    ...checkE12(draft, context),
+    ...checkE13(draft),
+    ...checkE14(draft),
+    ...checkE15(draft, context),
   ];
 }

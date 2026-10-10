@@ -31,6 +31,10 @@ Unit-test one spec per id, including the clean case.
 | E09 | `draw.count` < 1 or not a whole number, or a timing field is negative or not a number | `count` must be a positive whole number; a timing field must be a positive number of milliseconds. | — |
 | E10 | script has no section, or a section has no group | A script needs at least one section with one group. | add one |
 | E11 | `repeats` < 1, `gap` or `maxReplays` negative, a mediaitem's `defaultVirtualViewBox.height` ≤ 0, or `draw.count` > 999 | `repeats` must be at least 1; `gap` and `maxReplays` must not be negative; a default view box height must be greater than zero; a draw holds at most 999 items. | — |
+| E12 | a list source (`prefill.source`, no `prefill.bank`) that is not named, does not exist in the project's list library, or holds no lists; suspended when the library cannot be read | List source {listId} does not exist. | focus the field |
+| E13 | one `prefill` declares both `source` and `bank` | The item declares both a list source and a bank source; use one. | focus the field |
+| E14 | `prefill.itemcodeFormat` (default `{n}`) does not contain `{n}`, so every generated item gets the same itemcode | itemcodeFormat must contain {n}, or every generated item gets the same itemcode. | focus the field |
+| E15 | the itemcodes a list source generates (`itemcodeFormat` with `{n}` = 1…the entries of its **longest** list, the worst case a draw can pick) meet a fixed itemcode, a bank source's reserved range, or another list source's codes; a placeholder's own code is not a fixed code (the receiver replaces it) | Generated itemcode {code} is also used at {path}. | — |
 
 E04 is suspended, not passed, when the bank cannot be reached (ui-spec §9). The same applies to
 W05 on a drawn group when the bank's clip durations are unknown, and to W11 when the media index
@@ -53,6 +57,9 @@ cannot be fetched. The server still enforces the error checks on publish.
 | W11 | a playback or image file referenced by the draft is missing from the project's media; suspended when the media index cannot be fetched | {src} is not in the project's media. |
 | W12 | `playback.when` is `PRERECORDING` or `DURING` on a `type: 'nonrecording'` item | The item has no recording phase, so the clip plays at the wrong moment; use `WITH_PROMPT`, `BEFORE` or `ONDEMAND`. |
 | W13 | `playback` is set together with `Mediaitem.autoplay` or `Mediaitem.replay` | The item declares its placement twice; `playback` wins and the mediaitem flags are ignored. |
+| W14 | a `prefill.link` that ties one placeholder only, or ties list sources that share no list id (the receiver then draws their lists independently) | Only this item uses the link … / The sources linked as … share no list id | — |
+| W15 | `prefill.select` other than `random` (the only implemented mode) | select "{select}" is not supported; the list is drawn at random. | — |
+| W16 | a list source's `prefill.mediaitems` template has no `{entry}` in `text`, `src` or `alt`, so every generated item shows the same prompt | The template shows no {entry}, so every generated item shows the same prompt. | — |
 
 W08 carries the fix described in [data-model.md](data-model.md) §6; it stays a warning because the
 extra entries may be deliberate data a future recorder will use.

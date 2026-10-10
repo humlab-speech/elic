@@ -5,6 +5,7 @@ import {ActivatedRoute, convertToParamMap, provideRouter} from '@angular/router'
 import {of} from 'rxjs';
 import {ApiType, SPEECHRECORDER_CONFIG} from 'speechrecorderng';
 import {BankApiService} from '../core/bank-api.service';
+import {ListApiService} from '../core/list-api.service';
 import {EditorFindingsService, FINDINGS_DEBOUNCE_MS} from '../core/editor-findings.service';
 import {MediaService} from '../core/media.service';
 import {isObject} from '../core/validation/walk';
@@ -35,6 +36,7 @@ function setup(apiType: ApiType = ApiType.NORMAL) {
       {provide: SPEECHRECORDER_CONFIG, useValue: {apiEndPoint: 'api/v1', apiType, apiVersion: 1, withCredentials: true}},
       ScriptApiService,
       BankApiService,
+      ListApiService,
       MediaService,
     ],
   });
@@ -50,6 +52,7 @@ function draftRequest(http: HttpTestingController) {
 function flushContext(http: HttpTestingController): void {
   http.expectOne((request) => request.method === 'GET' && pathOf(request.urlWithParams) === 'api/v1/project/Demo1/bank').flush([]);
   http.expectOne((request) => request.method === 'GET' && pathOf(request.urlWithParams) === 'api/v1/project/Demo1/media').flush([]);
+  http.expectOne((request) => request.method === 'GET' && pathOf(request.urlWithParams) === 'api/v1/project/Demo1/list').flush([]);
   http.expectOne((request) => request.method === 'GET' && pathOf(request.urlWithParams) === 'api/v1/version').flush({recorderVersion: '3.11.26'});
 }
 

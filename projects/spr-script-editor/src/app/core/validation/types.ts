@@ -60,6 +60,18 @@ export interface BankView {
  */
 export type BankLookup = (bankId: string) => BankView | null | undefined;
 
+/** What a check needs from a list source: its lists' ids and sizes (the entries themselves stay on the receiver). */
+export interface ListView {
+  listId: string;
+  lists: ReadonlyArray<{id: string; entries: number}>;
+}
+
+/**
+ * Looks a list source up. `null` means it definitively does not exist; `undefined` means it could not
+ * be read, and the dependent check is suspended rather than passed.
+ */
+export type ListLookup = (listId: string) => ListView | null | undefined;
+
 /** The project's media paths. `null`/absent means the index could not be fetched (W11 suspended). */
 export type MediaIndex = ReadonlyArray<string> | null;
 
@@ -72,6 +84,8 @@ export type ClipDurations = (bankId: string) => ReadonlyMap<string, number> | un
 export interface ValidationContext {
   /** Bank lookup for E03, E04, W04 and W05. */
   bankLookup?: BankLookup;
+  /** List-source lookup for E12, E15 and W14. */
+  listLookup?: ListLookup;
   /** Clip durations for W05 on a drawn group. */
   clipDurations?: ClipDurations;
   /** The project's media list for W11. */

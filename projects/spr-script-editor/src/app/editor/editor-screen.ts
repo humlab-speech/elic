@@ -6,6 +6,7 @@ import {catchError, forkJoin, map, of} from 'rxjs';
 import type {Bank, BankItem} from 'speechrecorderng';
 import {EDITOR_STRINGS} from '../core/editor-strings';
 import {BankApiService} from '../core/bank-api.service';
+import {ListApiService, listLookupOf, type ListSummary} from '../core/list-api.service';
 import {EditorFindingsService} from '../core/editor-findings.service';
 import {MediaService} from '../core/media.service';
 import {ScriptApiService, type ScriptVersion} from '../core/script-api.service';
@@ -41,6 +42,7 @@ export class EditorScreen {
   private readonly router = inject(Router);
   private readonly scripts = inject(ScriptApiService);
   private readonly bankApi = inject(BankApiService);
+  private readonly listApi = inject(ListApiService);
   private readonly mediaApi = inject(MediaService);
   private readonly draft = inject(ScriptDraftService);
   private readonly editorFindings = inject(EditorFindingsService);
@@ -55,6 +57,8 @@ export class EditorScreen {
   private readonly bankViewsSignal = signal<ReadonlyMap<string, BankView>>(new Map());
   private readonly bankListSignal = signal<ReadonlyArray<Bank>>([]);
   private readonly mediaSignal = signal<ReadonlyArray<MediaEntry>>([]);
+  /** The list-source library; null while it is unknown (not loaded, or the receiver did not answer). */
+  private readonly listLibrarySignal = signal<ReadonlyArray<ListSummary> | null>(null);
   private readonly recorderVersion = signal<string | undefined>(undefined);
   readonly versions = signal<ReadonlyArray<ScriptVersion>>([]);
   private readonly summary = signal<ScriptSummary | null>(null);
@@ -94,7 +98,9 @@ export class EditorScreen {
     const views = this.bankViewsSignal();
     const bankList = this.bankListSignal();
     const mediaIndex = this.mediaSignal();
+    const listLibrary = this.listLibrarySignal();
     return {
+      listLookup: listLookupOf(listLibrary),
       bankLookup: (bankId) => {
         const view = views.get(bankId);
         if (view !== undefined) {
@@ -224,6 +230,7 @@ export class EditorScreen {
     this.bankViewsSignal.set(new Map());
     this.bankListSignal.set([]);
     this.mediaSignal.set([]);
+    this.listLibrarySignal.set(null);
     this.versions.set([]);
     this.summary.set(null);
     if (id === '') {
@@ -285,11 +292,12 @@ export class EditorScreen {
       bankList: this.bankApi.list(project).pipe(catchError(() => of<Bank[]>([]))),
       banks: bankCalls,
       media: this.mediaApi.list(project).pipe(catchError(() => of<MediaEntry[] | null>(null))),
+      lists: this.listApi.list(project).pipe(catchError(() => of<ListSummary[] | null>(null))),
       version: this.scripts.version().pipe(catchError(() => of(null))),
       versions: this.scripts.versions(project, id).pipe(catchError(() => of<ScriptVersion[] | null>(null))),
       summaries: this.scripts.list(project).pipe(catchError(() => of<ScriptSummary[] | null>(null))),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({bankList, banks, media, version, versions, summaries}) => {
+      next: ({bankList, banks, media, lists, version, versions, summaries}) => {
         const views = new Map<string, BankView>();
         for (const {bankId, items} of banks as Array<{bankId: string; items: BankItem[] | null}>) {
           if (items !== null) {
@@ -300,6 +308,7 @@ export class EditorScreen {
         this.bankViewsSignal.set(views);
         this.bankListSignal.set(bankList);
         this.mediaSignal.set(media ?? []);
+        this.listLibrarySignal.set(lists);
         this.recorderVersion.set(version?.recorderVersion);
         this.versions.set(versions ?? []);
         this.summary.set(summaries?.find((row) => String(row.scriptId) === id) ?? null);

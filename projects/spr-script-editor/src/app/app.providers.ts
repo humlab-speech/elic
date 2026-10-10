@@ -2,6 +2,7 @@ import {type Provider} from '@angular/core';
 import {provideAnimations} from '@angular/platform-browser/animations';
 import {ProjectService, SPEECHRECORDER_CONFIG, ScriptService} from 'speechrecorderng';
 import {BankApiService} from './core/bank-api.service';
+import {ListApiService} from './core/list-api.service';
 import {DrawApiService} from './core/draw-api.service';
 import {MediaService} from './core/media.service';
 import {ScriptApiService} from './core/script-api.service';
@@ -24,6 +25,7 @@ export const EDITOR_PROVIDERS: Provider[] = [
   ScriptService,
   ScriptApiService,
   BankApiService,
+  ListApiService,
   DrawApiService,
   MediaService,
 ];

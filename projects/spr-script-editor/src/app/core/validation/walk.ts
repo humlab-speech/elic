@@ -120,6 +120,49 @@ export function eachBankSource(draft: Draft): BankRef[] {
   return out;
 }
 
+export interface ListRef extends ItemRef {
+  prefill: Record<string, unknown>;
+  /** `${itemPath}.prefill` */
+  prefillPath: string;
+  /** The placeholder item's itemcode. */
+  placeholder: string;
+  /** The raw `prefill.source`, which may be missing or malformed. */
+  source: unknown;
+  /** The `prefill.itemcodeFormat`, `{n}` when unset. */
+  format: unknown;
+  link: string | null;
+}
+
+/**
+ * Every placeholder that names a list source (`prefill.source`, no bank source). A prefill with both is E13's
+ * and is not a list source: the receiver draws the bank one.
+ */
+export function eachListSource(draft: Draft): ListRef[] {
+  const out: ListRef[] = [];
+  for (const ref of eachItem(draft)) {
+    const prefill = ref.item['prefill'];
+    if (!isObject(prefill) || prefill['source'] === undefined || prefill['source'] === null || hasBankSource(prefill)) {
+      continue;
+    }
+    const link = prefill['link'];
+    out.push({
+      ...ref,
+      prefill,
+      prefillPath: `${ref.itemPath}.prefill`,
+      placeholder: trimmedCode(ref.item),
+      source: prefill['source'],
+      format: prefill['itemcodeFormat'] ?? '{n}',
+      link: typeof link === 'string' && link !== '' ? link : null,
+    });
+  }
+  return out;
+}
+
+/** True when a prefill carries a bank source, whatever its shape (the receiver's test). */
+export function hasBankSource(prefill: Record<string, unknown>): boolean {
+  return prefill['bank'] !== undefined && prefill['bank'] !== null;
+}
+
 export function isNonRecordingItem(item: Record<string, unknown>): boolean {
   return item['type'] === 'nonrecording';
 }

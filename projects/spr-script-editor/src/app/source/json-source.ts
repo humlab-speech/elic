@@ -6,6 +6,7 @@ import {catchError, firstValueFrom, forkJoin, map, of} from 'rxjs';
 import type {Bank, BankItem} from 'speechrecorderng';
 import {BankApiService} from '../core/bank-api.service';
 import {downloadJson} from '../core/download';
+import {ListApiService, listLookupOf, type ListSummary} from '../core/list-api.service';
 import {EditorFindingsService} from '../core/editor-findings.service';
 import {MediaService} from '../core/media.service';
 import {applyFix} from '../core/normalise';
@@ -41,6 +42,7 @@ export class JsonSource {
   private readonly route = inject(ActivatedRoute);
   private readonly scripts = inject(ScriptApiService);
   private readonly bankApi = inject(BankApiService);
+  private readonly listApi = inject(ListApiService);
   private readonly mediaApi = inject(MediaService);
   private readonly findingsStore = inject(EditorFindingsService);
 
@@ -161,7 +163,7 @@ export class JsonSource {
   private async loadContext(project: string, draft: EditorScript): Promise<void> {
     const bankIds = [...new Set(eachBankSource(draft).map((ref) => ref.bankId).filter((bankId) => bankId !== ''))];
     try {
-      const {bankList, banks, media, version} = await firstValueFrom(forkJoin({
+      const {bankList, banks, media, lists, version} = await firstValueFrom(forkJoin({
         bankList: this.bankApi.list(project).pipe(catchError(() => of<Bank[]>([]))),
         banks: bankIds.length === 0
           ? of<Array<{bankId: string; items: BankItem[] | null}>>([])
@@ -170,6 +172,7 @@ export class JsonSource {
             catchError(() => of({bankId, items: null})),
           ))),
         media: this.mediaApi.list(project).pipe(catchError(() => of<MediaEntry[] | null>(null))),
+        lists: this.listApi.list(project).pipe(catchError(() => of<ListSummary[] | null>(null))),
         version: this.scripts.version().pipe(catchError(() => of(null))),
       }));
       const views = new Map<string, BankView>();
@@ -187,6 +190,7 @@ export class JsonSource {
         return bankList.some((bank) => bank.bankId === bankId) ? undefined : null;
       };
       this.context.set({
+        listLookup: listLookupOf(lists),
         bankLookup,
         mediaIndex: media === null ? null : media.map((entry) => entry.src),
         recorderVersion: version?.recorderVersion,

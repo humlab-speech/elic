@@ -14,6 +14,8 @@ export interface CorpusExpect {
 export interface CorpusDoc {
   note?: string;
   banks?: Record<string, BankView>;
+  /** List sources by id, as stored: `{lists: [{id, entries}]}`. */
+  lists?: Record<string, {lists: Array<{id: string | number; entries: string[]}>}>;
   draft: unknown;
   expect: CorpusExpect[];
 }
@@ -32,7 +34,16 @@ export interface CorpusResult {
 
 export function contextFor(doc: CorpusDoc): ValidationContext {
   const banks = doc.banks;
-  return {bankLookup: banks === undefined ? undefined : (bankId: string) => banks[bankId] ?? null};
+  const lists = doc.lists;
+  return {
+    bankLookup: banks === undefined ? undefined : (bankId: string) => banks[bankId] ?? null,
+    listLookup: lists === undefined ? undefined : (listId: string) => {
+      const stored = Object.prototype.hasOwnProperty.call(lists, listId) ? lists[listId] : undefined;
+      return stored === undefined
+        ? null
+        : {listId, lists: stored.lists.map((list) => ({id: String(list.id), entries: list.entries.length}))};
+    },
+  };
 }
 
 export function runCorpus(doc: CorpusDoc): CorpusResult {
@@ -62,4 +73,11 @@ export const CORPUS_FILES = [
   'playback-without-audio',
   'bank-count-cap',
   'bank-prefix-across-sections',
+  'list-clean',
+  'list-source-missing',
+  'list-source-empty-name',
+  'list-source-and-bank',
+  'list-format-without-n',
+  'list-codes-clash',
+  'list-codes-clash-between',
 ] as const;

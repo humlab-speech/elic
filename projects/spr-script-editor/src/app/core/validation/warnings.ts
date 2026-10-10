@@ -15,7 +15,7 @@ import {EDITOR_STRINGS} from '../editor-strings';
 import type {Draft, Finding, ValidationContext} from './types';
 import {filterOf, queryBank} from './filter';
 import {fillTemplate} from './interpolate';
-import {eachBankSource, eachItem, eachSection, isAudio, isImage, isNonRecordingItem, isObject, mediaitemsOf} from './walk';
+import {eachBankSource, eachItem, eachListSource, eachSection, isAudio, isImage, isNonRecordingItem, isObject, mediaitemsOf} from './walk';
 
 const S = EDITOR_STRINGS.validation;
 
@@ -301,6 +301,62 @@ export function checkW13(draft: Draft): Finding[] {
   return findings;
 }
 
+/**
+ * W14 — a `link` that ties nothing (one member) or ties sources that share no list id. Linked
+ * placeholders draw one list id and resolve it against each source (paired word and sentence lists).
+ */
+export function checkW14(draft: Draft, context: ValidationContext = {}): Finding[] {
+  const findings: Finding[] = [];
+  const byLink = new Map<string, ReturnType<typeof eachListSource>>();
+  for (const ref of eachListSource(draft)) {
+    if (ref.link !== null) {
+      byLink.set(ref.link, [...(byLink.get(ref.link) ?? []), ref]);
+    }
+  }
+  for (const [link, members] of byLink) {
+    if (members.length === 1) {
+      findings.push(warning('W14', `${members[0].prefillPath}.link`, fillTemplate(S.w14Single, {link})));
+      continue;
+    }
+    const views = members.map((member) => (typeof member.source === 'string' ? context.listLookup?.(member.source) : undefined));
+    if (views.some((view) => view === undefined || view === null)) {
+      continue;
+    }
+    const idSets = (views as Array<NonNullable<typeof views[number]>>).map((view) => new Set(view.lists.map((list) => list.id)));
+    const shared = [...idSets[0]].some((id) => idSets.every((ids) => ids.has(id)));
+    if (!shared) {
+      findings.push(warning('W14', `${members[members.length - 1].prefillPath}.link`, fillTemplate(S.w14Disjoint, {link})));
+    }
+  }
+  return findings;
+}
+
+/** W15 — a `select` other than `random`: only random is implemented. */
+export function checkW15(draft: Draft): Finding[] {
+  const findings: Finding[] = [];
+  for (const ref of eachListSource(draft)) {
+    const select = ref.prefill['select'];
+    if (select !== undefined && select !== null && select !== 'random') {
+      findings.push(warning('W15', `${ref.prefillPath}.select`, fillTemplate(S.w15, {select: String(select)})));
+    }
+  }
+  return findings;
+}
+
+/** W16 — a template with no `{entry}`: every generated item shows the same prompt. */
+export function checkW16(draft: Draft): Finding[] {
+  const findings: Finding[] = [];
+  for (const ref of eachListSource(draft)) {
+    const template = Array.isArray(ref.prefill['mediaitems']) ? ref.prefill['mediaitems'] as unknown[] : [];
+    const usesEntry = template.some((mediaitem) => isObject(mediaitem)
+      && ['text', 'src', 'alt'].some((field) => typeof mediaitem[field] === 'string' && (mediaitem[field] as string).includes('{entry}')));
+    if (!usesEntry) {
+      findings.push(warning('W16', `${ref.prefillPath}.mediaitems`, S.w16));
+    }
+  }
+  return findings;
+}
+
 /** Every warning check, in catalogue order. */
 export function runWarningChecks(draft: Draft, context: ValidationContext = {}): Finding[] {
   return [
@@ -317,5 +373,8 @@ export function runWarningChecks(draft: Draft, context: ValidationContext = {}):
     ...checkW11(draft, context),
     ...checkW12(draft),
     ...checkW13(draft),
+    ...checkW14(draft, context),
+    ...checkW15(draft),
+    ...checkW16(draft),
   ];
 }

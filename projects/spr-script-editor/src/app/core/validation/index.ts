@@ -8,13 +8,13 @@ import {runWarningChecks} from './warnings';
 import {runNoteChecks} from './notes';
 
 export * from './types';
-export {checkE01, checkE02, checkE03, checkE04, checkE05, checkE06, checkE07, checkE08, checkE09, checkE10, checkE11, TIMING_FIELDS} from './errors';
-export {checkW01, checkW02, checkW03, checkW04, checkW05, checkW06, checkW07, checkW08, checkW09, checkW10, checkW11, checkW12, checkW13} from './warnings';
+export {checkE01, checkE02, checkE03, checkE04, checkE05, checkE06, checkE07, checkE08, checkE09, checkE10, checkE11, checkE12, checkE13, checkE14, checkE15, TIMING_FIELDS} from './errors';
+export {checkW01, checkW02, checkW03, checkW04, checkW05, checkW06, checkW07, checkW08, checkW09, checkW10, checkW11, checkW12, checkW13, checkW14, checkW15, checkW16} from './warnings';
 export {checkN01, checkN02, checkN03, checkN04, checkN05, checkN06} from './notes';
 export {parseJsonSource, serialiseJson} from './json-lines';
 export type {ParsedJsonSource, JsonLineError} from './json-lines';
 
-/** Every finding for a draft, in catalogue order (E01…E11, W01…W13, N01…N06). */
+/** Every finding for a draft, in catalogue order (E01…E15, W01…W16, N01…N06). */
 export function runChecks(draft: Draft, context: ValidationContext = {}): Finding[] {
   return [
     ...runErrorChecks(draft, context),

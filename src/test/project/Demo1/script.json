@@ -810,45 +810,5 @@
     "modifiedBy": "klausj",
     "archived": false,
     "sectionNames": []
-  },
-  {
-    "scriptId": "sti-sentencelists",
-    "name": "STI sentence lists",
-    "status": "DRAFT",
-    "publishedVersion": 0,
-    "draftVersion": 1,
-    "sections": 0,
-    "fixedItems": 0,
-    "drawnItems": 0,
-    "itemcodes": [],
-    "sessions": {
-      "total": 0,
-      "started": 0,
-      "byVersion": {}
-    },
-    "modified": "2026-09-05T10:00:00Z",
-    "modifiedBy": "klausj",
-    "archived": false,
-    "sectionNames": []
-  },
-  {
-    "scriptId": "sti-wordlists",
-    "name": "STI word lists",
-    "status": "DRAFT",
-    "publishedVersion": 0,
-    "draftVersion": 1,
-    "sections": 0,
-    "fixedItems": 0,
-    "drawnItems": 0,
-    "itemcodes": [],
-    "sessions": {
-      "total": 0,
-      "started": 0,
-      "byVersion": {}
-    },
-    "modified": "2026-09-05T10:00:00Z",
-    "modifiedBy": "klausj",
-    "archived": false,
-    "sectionNames": []
   }
 ]

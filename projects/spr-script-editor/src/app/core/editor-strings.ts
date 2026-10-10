@@ -103,7 +103,15 @@ export const EDITOR_STRINGS = {
     e11Height: 'The virtual view box height must be greater than zero.',
     e11Count: 'A drawn itemcode range holds at most 999 items.',
 
-    // W01–W13
+    e12NoSource: 'The item draws from a list source but none is named.',
+    e12Missing: 'List source {listId} does not exist.',
+    e12Empty: 'List source {listId} holds no lists.',
+    e12Suspended: 'The list source could not be read, so its existence is not checked.',
+    e13: 'The item declares both a list source and a bank source; use one.',
+    e14: 'itemcodeFormat must contain {n}, or every generated item gets the same itemcode.',
+    e15: 'Generated itemcode {code} is also used at {path}.',
+
+    // W01–W16
     w01: 'The section records automatically, but this item has no duration. The recording runs until the speaker presses Next.',
     w02: 'Image prompt has no alt text. Screen-reader users get no prompt, and lists show only the file name.',
     w03: 'Playing while recording captures the sound through the microphone unless headphones are required.',
@@ -120,6 +128,10 @@ export const EDITOR_STRINGS = {
     w11Suspended: '{src} cannot be checked because the project\u2019s media list could not be fetched.',
     w12: 'The item has no recording phase, so the clip plays at the wrong moment; use WITH_PROMPT, BEFORE or ONDEMAND.',
     w13: 'The item declares its placement twice; `playback` wins and the mediaitem flags are ignored.',
+    w14Single: 'Only this item uses the link "{link}", so it is not tied to any other list source.',
+    w14Disjoint: 'The sources linked as "{link}" share no list id, so the receiver draws their lists independently.',
+    w15: 'select "{select}" is not supported; the list is drawn at random.',
+    w16: 'The template shows no {entry}, so every generated item shows the same prompt.',
 
     // N01–N06
     n01: '{legacy} is read as the {modern} because {modern} is not set.',

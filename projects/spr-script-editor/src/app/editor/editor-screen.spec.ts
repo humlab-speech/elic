@@ -6,6 +6,7 @@ import {RouterTestingHarness} from '@angular/router/testing';
 import {ApiType, SPEECHRECORDER_CONFIG} from 'speechrecorderng';
 import {firstValueFrom, timer} from 'rxjs';
 import {BankApiService} from '../core/bank-api.service';
+import {ListApiService} from '../core/list-api.service';
 import {MediaService} from '../core/media.service';
 import {ScriptApiService} from '../core/script-api.service';
 import {EditorScreen} from './editor-screen';
@@ -88,6 +89,7 @@ async function mount(url = '/project/Demo1/script/1245/edit'): Promise<Harness> 
       {provide: SPEECHRECORDER_CONFIG, useValue: {apiEndPoint: 'api/v1', apiType: ApiType.NORMAL, apiVersion: 1}},
       ScriptApiService,
       BankApiService,
+      ListApiService,
       MediaService,
     ],
   });
@@ -116,6 +118,7 @@ async function loadDraft(state: Harness, text: string): Promise<void> {
 
   state.http.expectOne((request) => pathOf(request.urlWithParams).endsWith('/project/Demo1/bank')).flush([]);
   state.http.expectOne((request) => pathOf(request.urlWithParams).endsWith('/project/Demo1/media')).flush([]);
+  state.http.expectOne((request) => pathOf(request.urlWithParams).endsWith('/project/Demo1/list')).flush([]);
   state.http.expectOne((request) => pathOf(request.urlWithParams) === 'api/v1/version')
     .flush({recorderVersion: '3.12'});
   state.http.expectOne((request) => pathOf(request.urlWithParams).endsWith('/project/Demo1/script/1245/version')).flush([]);

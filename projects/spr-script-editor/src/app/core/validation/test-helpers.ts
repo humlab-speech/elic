@@ -42,3 +42,17 @@ export function ids(findings: ReadonlyArray<Finding>): string[] {
 export function paths(findings: ReadonlyArray<Finding>): string[] {
   return findings.map((finding) => finding.path);
 }
+
+/** A list lookup over `{id: [entries per list…]}`; unknown ids are "does not exist". */
+export function listLookupOver(sources: Record<string, number[]>): ValidationContext['listLookup'] {
+  return (listId: string) => {
+    const sizes = sources[listId];
+    return sizes === undefined ? null : {listId, lists: sizes.map((entries, index) => ({id: String(index + 1), entries}))};
+  };
+}
+
+/** A placeholder that draws from a list source. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function listItem(itemcode: string, source: unknown, prefill: Record<string, any> = {}): Draft {
+  return item({itemcode, prefill: {source, itemcodeFormat: `${itemcode}.{n}`, mediaitems: [{mimetype: 'text/plain', text: '{entry}'}], ...prefill}});
+}
