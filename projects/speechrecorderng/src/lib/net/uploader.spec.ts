@@ -11,6 +11,7 @@ import {
     UploadStatus
 } from "./uploader";
 import {SprDb} from "../db/inddb";
+import {DEFAULT_UPLOAD_CONFIG} from "./uploader";
 
 // Uploader uses window.setTimeout for retries. Tests run with real timers and small
 // retry delays (20ms base, 40ms cap) plus generous wait margins.
@@ -35,7 +36,8 @@ describe('Uploader', () => {
     });
 
     function uploader(cfg: UploadConfig = {}): Uploader {
-        const upl = new Uploader(http, false, cfg);
+        // persistence is the default; the specs that are not about it keep out of the shared IndexedDB
+        const upl = new Uploader(http, false, {persistQueue: false, ...cfg});
         upl.DEBUG_DELAY = 0;
         return upl;
     }
@@ -351,6 +353,57 @@ describe('Uploader', () => {
             upl3.restorePersistedUploads().subscribe({next: (n) => { restored2 = n; }, complete: () => resolve()});
         });
         expect(restored2).toBe(0);
+        await clearPersistedQueue();
+    });
+
+    async function restoreCount(upl: Uploader): Promise<number> {
+        let restored = -1;
+        await new Promise<void>((resolve) => {
+            upl.restorePersistedUploads().subscribe({next: (n) => { restored = n; }, complete: () => resolve()});
+        });
+        return restored;
+    }
+
+    it('persists by default', () => {
+        expect(DEFAULT_UPLOAD_CONFIG.persistQueue).toBe(true);
+    });
+
+    it('an upload that succeeds at once leaves nothing behind (the put is not overtaken by the delete)', async () => {
+        await clearPersistedQueue();
+        const upl = uploader({persistQueue: true});
+        upl.queueUpload(new Upload(blob(10), '/api/fast'));
+        httpMock.expectOne('/api/fast').flush({});
+        await wait(100);
+        expect(await restoreCount(uploader({persistQueue: true}))).toBe(0);
+    });
+
+    it('a terminal refusal is not kept for the next page load', async () => {
+        await clearPersistedQueue();
+        const upl = uploader({persistQueue: true});
+        upl.queueUpload(new Upload(blob(10), '/api/refused'));
+        httpMock.expectOne('/api/refused').flush('no', {status: 409, statusText: 'Conflict'});
+        await wait(100);
+        expect(await restoreCount(uploader({persistQueue: true}))).toBe(0);
+    });
+
+    it('restores in queue order, and never queues the same upload twice', async () => {
+        await clearPersistedQueue();
+        const upl1 = uploader({persistQueue: true, maxAttempts: 1});
+        for (const name of ['prepare', 'chunk0', 'concat']) {
+            upl1.queueUpload(new Upload(blob(10), '/api/' + name));
+            httpMock.expectOne('/api/' + name).error(networkError());
+        }
+        await wait(100);
+        const upl2 = uploader({persistQueue: true});
+        expect(await restoreCount(upl2)).toBe(3);
+        expect(await restoreCount(upl2)).toBe(0);
+        const first = httpMock.expectOne((r) => r.url.startsWith('/api/'));
+        expect(first.request.url).toBe('/api/prepare');
+        first.flush({});
+        httpMock.expectOne('/api/chunk0').flush({});
+        httpMock.expectOne('/api/concat').flush({});
+        await wait(100);
+        expect(await restoreCount(uploader({persistQueue: true}))).toBe(0);
         await clearPersistedQueue();
     });
 

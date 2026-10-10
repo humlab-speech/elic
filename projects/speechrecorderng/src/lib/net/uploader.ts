@@ -45,8 +45,8 @@ export interface UploadConfig {
     // The server must answer GET {chunkUrl}/{chunkIdx} with 2xx (stored) or 404 (not stored).
     // Enables safe re-upload after a crash or reload. Default: false
     checkStoredChunkBeforeUpload?: boolean;
-    // If true, persist Blob uploads to IndexedDB before POSTing and remove them on success.
-    // Restore with Uploader.restorePersistedUploads() after a page reload. Default: false
+    // If true, persist uploads (audio Blobs and prepare/concat requests) to IndexedDB before POSTing and remove them on success.
+    // Restore with Uploader.restorePersistedUploads() after a page reload. Default: true
     persistQueue?: boolean;
 }
 
@@ -59,7 +59,7 @@ export const DEFAULT_UPLOAD_CONFIG: Required<UploadConfig> = {
     idempotencyHeader: 'Idempotency-Key',
     maxConcurrentUploads: 1,
     checkStoredChunkBeforeUpload: false,
-    persistQueue: false
+    persistQueue: true
 };
 
 export class UploaderStatusChangeEvent {
@@ -121,6 +121,8 @@ export interface PersistedUploadEntry {
     url: string;
     // audio payload; absent for a control request (prepare/concat), which persists its fields instead
     blob?: Blob;
+    // when it was queued; restores in this order (prepare, chunks, concat)
+    queuedAt?: number;
     form?: Array<[string, string | Blob]>;
 }
 
@@ -566,6 +568,10 @@ export class Uploader {
         //console.debug("Process upload error...")
         ul.lastError = err;
         if (err.terminal || ul.attemptCount >= this.uploadCfg.maxAttempts) {
+            if (err.terminal) {
+                // a refusal (4xx) will be the same after a reload; keeping it would re-queue it for ever
+                this.removePersistedUpload(ul);
+            }
             ul.failed(err);
             // continue with the next upload in the queue resp. report the partial state
             this.status = UploaderStatus.ERR;
@@ -672,39 +678,51 @@ export class Uploader {
             data.forEach((value, name) => fields.push([name, value]));
         }
         const payload = data instanceof Blob ? {blob: data} : {form: fields};
-        SprDb.prepare().subscribe({
-            next: (db) => {
-                try {
-                    const tr = db.transaction(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME, 'readwrite');
-                    tr.objectStore(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME)
-                        .put({idempotencyKey: ul.idempotencyKey, url: ul.url, ...payload});
-                } catch (err) {
-                    SprLogger.error('Could not persist upload for later resume: ' + err);
-                }
-            },
-            error: (err: unknown) => {
-                SprLogger.error('Could not persist upload for later resume: ' + err);
-            }
-        });
+        const entry = {idempotencyKey: ul.idempotencyKey, url: ul.url, queuedAt: Date.now(), ...payload};
+        this.dbWrite('persist upload for later resume', (store) => store.put(entry));
     }
 
     private removePersistedUpload(ul: Upload): void {
         if (!this.uploadCfg.persistQueue) {
             return;
         }
-        SprDb.prepare().subscribe({
-            next: (db) => {
-                try {
-                    const tr = db.transaction(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME, 'readwrite');
-                    tr.objectStore(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME).delete(ul.idempotencyKey);
-                } catch (err) {
-                    SprLogger.error('Could not remove persisted upload: ' + err);
+        this.dbWrite('remove persisted upload', (store) => store.delete(ul.idempotencyKey));
+    }
+
+    // Writes to the persisted queue run one after the other, each waiting for its transaction to
+    // commit: a fast upload used to delete its entry before the put had run, leaving a stale entry
+    // that was uploaded again on every later page load.
+    private dbChain: Promise<void> = Promise.resolve();
+
+    private dbWrite(what: string, op: (store: IDBObjectStore) => void): void {
+        this.dbChain = this.dbChain.then(() => new Promise<void>((resolve) => {
+            let used = false;
+            SprDb.prepare().subscribe({
+                next: (db) => {
+                    if (used) {
+                        return;
+                    }
+                    used = true;
+                    try {
+                        const tr = db.transaction(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME, 'readwrite');
+                        op(tr.objectStore(SprDb.UPLOAD_QUEUE_OBJECT_STORE_NAME));
+                        tr.oncomplete = () => resolve();
+                        // quota exhausted, storage cleared, private mode: the upload still proceeds, unprotected
+                        tr.onerror = tr.onabort = () => {
+                            SprLogger.error('Could not ' + what + ': ' + tr.error);
+                            resolve();
+                        };
+                    } catch (err) {
+                        SprLogger.error('Could not ' + what + ': ' + err);
+                        resolve();
+                    }
+                },
+                error: (err: unknown) => {
+                    SprLogger.error('Could not ' + what + ': ' + err);
+                    resolve();
                 }
-            },
-            error: () => {
-                // removing a stale queue entry is best effort
-            }
-        });
+            });
+        }));
     }
 
     // Restores uploads persisted before a page reload and queues them again.
@@ -722,20 +740,23 @@ export class Uploader {
                             let restored = 0;
                             const entries: unknown = req.result;
                             if (Array.isArray(entries)) {
-                                for (const entry of entries) {
-                                    if (isPersistedUploadEntry(entry)) {
-                                        let data: Blob | FormData;
-                                        if (entry.blob instanceof Blob) {
-                                            data = entry.blob;
-                                        } else {
-                                            data = new FormData();
-                                            for (const [name, value] of entry.form ?? []) {
-                                                data.append(name, value);
-                                            }
+                                // initialisation can run more than once per page; a key already queued is not queued twice
+                                const queued = new Set(this.que.map((ul) => ul.idempotencyKey));
+                                const stored = entries.filter(isPersistedUploadEntry)
+                                    .filter((entry) => !queued.has(entry.idempotencyKey))
+                                    .sort((x, y) => (x.queuedAt ?? 0) - (y.queuedAt ?? 0));
+                                for (const entry of stored) {
+                                    let data: Blob | FormData;
+                                    if (entry.blob instanceof Blob) {
+                                        data = entry.blob;
+                                    } else {
+                                        data = new FormData();
+                                        for (const [name, value] of entry.form ?? []) {
+                                            data.append(name, value);
                                         }
-                                        this.queueUpload(new Upload(data, entry.url, null, entry.idempotencyKey));
-                                        restored++;
                                     }
+                                    this.queueUpload(new Upload(data, entry.url, null, entry.idempotencyKey));
+                                    restored++;
                                 }
                             }
                             subscriber.next(restored);

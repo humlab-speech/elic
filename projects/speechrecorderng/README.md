@@ -789,7 +789,7 @@ By default any 2xx response counts as stored. If the server confirms storage exp
 * `idempotencyHeader` (default `Idempotency-Key`) — header name carrying the idempotency key.
 * `maxConcurrentUploads` (default 1) — maximum number of POST requests in flight. When set above 1, the server must tolerate uploads arriving out of order (e.g. chunk POSTs in flight while the prepare request is still being processed).
 * `checkStoredChunkBeforeUpload` (default false) — check via GET `{chunkUrl}/{chunkIdx}` whether the server already holds a chunk before uploading it (2xx = stored, 404 = not stored). Enables safe re-upload after a crash or reload.
-* `persistQueue` (default false) — persist Blob uploads to IndexedDB before POSTing. Pending uploads survive a page reload: the library restores and re-queues them on startup with the same idempotency keys, so the server can deduplicate uploads that already succeeded before the reload.
+* `persistQueue` (default true) — persist uploads to IndexedDB before POSTing: the audio blobs and the prepare/concat requests. Pending uploads survive a page reload: the library restores them in their original order on startup with the same idempotency keys, so the server can deduplicate uploads that already succeeded before the reload. An entry is removed when its upload succeeds or the server refuses it (4xx); one that only ran out of attempts (network, 5xx) stays and is retried on the next load or when the browser comes back online. Set `false` to keep nothing on the client.
 
 A recording is only marked as server persisted after the server acknowledges the upload. While uploads are pending or have terminally failed, the client blocks page navigation and does not mark the session as complete.
 
