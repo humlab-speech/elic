@@ -17,7 +17,7 @@ import {cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rm
 import {randomBytes} from 'node:crypto';
 import {dirname, join, resolve, sep} from 'node:path';
 import {RequestError} from './body.mjs';
-import {resolveBankSources} from './draw.mjs';
+import {resolveBankSources, resolveListSources} from './draw.mjs';
 import {etagOf} from './etag.mjs';
 import {RECORDER_VERSION, supportsRecorderVersion} from './feature-versions.mjs';
 import {loadOrCreateSalt, pseudonymiseSpeaker} from './pseudonym.mjs';
@@ -417,30 +417,59 @@ export class Store {
     const recorded = session.speaker === null || session.speaker === undefined
       ? new Set()
       : this.recordedBankItemIds({project: session.project, speaker: session.speaker});
-    let resolved;
+    const context = {
+      // A redraw bumps `session.redraw`, which changes the seed (the stored trace stays the truth).
+      sessionId: session.redraw === undefined || session.redraw === null || session.redraw === 0
+        ? session.sessionId
+        : `${session.sessionId}#${session.redraw}`,
+      speaker: session.speaker ?? null,
+      scriptId: coerceId(scriptId),
+      scriptVersion: meta?.publishedVersion ?? null,
+    };
+    let banks;
+    let lists;
     try {
-      resolved = resolveBankSources(doc, {
-        lookupBank: (bankId) => this.bank(bankId),
-        // A redraw bumps `session.redraw`, which changes the seed (the stored trace stays the truth).
-        sessionId: session.redraw === undefined || session.redraw === null || session.redraw === 0
-          ? session.sessionId
-          : `${session.sessionId}#${session.redraw}`,
-        speaker: session.speaker ?? null,
-        scriptId: coerceId(scriptId),
-        scriptVersion: meta?.publishedVersion ?? null,
-        recordedBankItemIds: recorded,
-      });
+      banks = resolveBankSources(doc, {...context, lookupBank: (bankId) => this.bank(bankId), recordedBankItemIds: recorded});
+      // List sources (the STI word and sentence lists) are drawn here too, so the recorder receives
+      // a script with nothing left to expand and every launch draws on the receiver.
+      lists = resolveListSources(banks.script, {...context, lookupSource: (sourceId) => this.script(sourceId)});
     } catch (err) {
-      throw new RequestError(409, `cannot resolve the session's bank sources: ${err.message}`, {code: 'BANK_SOURCE_UNRESOLVED'});
+      throw new RequestError(409, `cannot resolve the session's draws: ${err.message}`, {code: 'BANK_SOURCE_UNRESOLVED'});
     }
-    if (resolved.trace === null) {
+    if (banks.trace === null && lists.trace === null) {
       return null;
     }
     return {
-      script: coerceId(this.materialiseScript(session.sessionId, resolved.script)),
-      bankDraws: resolved.trace,
+      script: coerceId(this.materialiseScript(session.sessionId, lists.script)),
+      bankDraws: banks.trace ?? [],
+      listDraws: lists.trace ?? [],
+      prefills: Object.fromEntries((lists.trace ?? []).map((draw) => [draw.placeholderItemcode, {source: draw.source, list: draw.list}])),
       scriptSource: coerceId(scriptId),
     };
+  }
+
+  /**
+   * A launch of a session: when it draws anything and nothing has been recorded yet, the draw is
+   * made again (a new `redraw` seed), so a session that was opened and abandoned — or reloaded —
+   * does not stay on its first draw. The first stored recording freezes the draw for good: the
+   * items on disk and the items in the metadata must agree. Draws fixed by speaker or script keep
+   * their items by construction, whatever the seed.
+   */
+  relaunchSession(id) {
+    const session = this.session(id);
+    if (session === null || session.type === 'TEST' || session.sealed === true || session.status === 'COMPLETED') {
+      return session;
+    }
+    const draws = (session.bankDraws ?? []).length + (session.listDraws ?? []).length;
+    if (draws === 0 || this.recordingFilesOfSession(id).length > 0) {
+      return session;
+    }
+    const candidate = {...session, redraw: (session.redraw ?? 0) + 1};
+    const resolved = this.resolveSessionDraws(candidate);
+    if (resolved === null) {
+      return session;
+    }
+    return this.patchSession(id, {...resolved, redraw: candidate.redraw, drawnDate: new Date().toISOString()});
   }
 
   /** The bank item ids this speaker already has a recording for, within the project. */
@@ -509,6 +538,8 @@ export class Store {
       ...(uuid === null ? {} : {uuid}),
       ...(itemcode === null ? {} : {itemcode}),
       ...(promptItem === null ? {} : {recording: promptItem}),
+      ...(drawOf(session, itemcode) === null ? {} : {draw: drawOf(session, itemcode)}),
+      ...(itemcode !== null && this.promptItem(script, itemcode) === null ? {promptMissing: true} : {}),
     };
     this.writeJson(this.recordingFilePath(id), meta);
     return meta;
@@ -1464,6 +1495,31 @@ export class Store {
 }
 
 /** Numeric ids sort numerically, string ids (UUIDs) after them, lexicographically. */
+/**
+ * What was drawn for an itemcode, from the session's own record: which source, which list or bank
+ * item, the key and the redraw it came from. Written into the recording's metadata so the file says
+ * what the speaker was shown without a lookup that a later redraw or republish could change.
+ */
+function drawOf(session, itemcode) {
+  if (session === null || itemcode === null || itemcode === undefined) {
+    return null;
+  }
+  const common = {redraw: session.redraw ?? 0, drawnDate: session.drawnDate ?? null, scriptSource: session.scriptSource ?? null};
+  for (const draw of session.bankDraws ?? []) {
+    const item = (draw.items ?? []).find((entry) => entry.itemcode === itemcode);
+    if (item !== undefined) {
+      return {kind: 'bank', bank: draw.bank, bankItemId: item.bankItemId ?? null, placeholder: draw.placeholderItemcode, key: draw.key, scriptVersion: draw.drawnForVersion ?? null, ...common};
+    }
+  }
+  for (const draw of session.listDraws ?? []) {
+    const item = (draw.items ?? []).find((entry) => entry.itemcode === itemcode);
+    if (item !== undefined) {
+      return {kind: 'list', source: draw.source, list: draw.list, entry: item.entry, placeholder: draw.placeholderItemcode, key: draw.key, scriptVersion: draw.drawnForVersion ?? null, ...common};
+    }
+  }
+  return null;
+}
+
 function compareIds(a, b) {
   const na = Number(a);
   const nb = Number(b);

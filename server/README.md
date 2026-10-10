@@ -42,11 +42,20 @@ CI runs this and the other five jobs (`.github/workflows/tests.yml`).
 <data>/script/<id>/versions.json      the published version index, newest first
 <data>/script/<id>/revisions/<n>.json draft snapshots (pruned by gc)
 <data>/script/<id>.json               legacy flat script: read as published v1, never written
-<data>/session/<id>.json              session; bank draws and prefill choices are recorded here
+<data>/session/<id>.json              session; bank draws (bankDraws), list draws (listDraws, prefills) are recorded here
 <data>/recordingfile/<id>.{json,wav}  recording metadata and audio
 <data>/bank/<id>.json                 item banks (BUILTIN banks are read-only)
 <data>/uploads/                       runtime state: idempotency journal, chunk sessions, ids
 ```
+
+## Draws and the session lifecycle
+
+Bank sources (`prefill.bank`) and list sources (`prefill.source`, the STI word and sentence lists) are both
+drawn **on the receiver**; the recorder gets a materialised script with nothing left to expand.
+`GET session/{id}` is a *launch*: while nothing is recorded the draw is made again (new `redraw` seed), the
+first stored recording freezes it. `fixedBy` SPEAKER/SCRIPT keeps the same items across launches. Each
+recording's metadata carries `draw` (source, list or bank item, key, redraw) and `promptMissing` when its
+itemcode is not in the script. `PATCH session` accepts progress fields only; status never moves back.
 
 ## Maintenance
 

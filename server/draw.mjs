@@ -219,3 +219,123 @@ export function resolveBankSources(script, context) {
   }
   return {script: resolved, trace};
 }
+
+// ---------------------------------------------------------------- list sources
+
+/**
+ * The list-source declarations (`prefill.source`, the STI word and sentence lists) of a script. The
+ * recorder used to expand these in the browser with `Math.random`; the receiver does it now, at
+ * every session launch, so the draw is reproducible, shows up in the draw record and the expanded
+ * items reach the recording metadata.
+ */
+export function listSourcesOf(script) {
+  const found = [];
+  for (const [sectionIdx, section] of (script?.sections ?? []).entries()) {
+    for (const [groupIdx, group] of (section?.groups ?? []).entries()) {
+      for (const [itemIdx, item] of (group?.promptItems ?? []).entries()) {
+        const prefill = item?.prefill;
+        if (prefill?.source !== undefined && prefill?.source !== null && !hasBankSource(prefill) && item?.itemcode != null) {
+          found.push({sectionIdx, groupIdx, itemIdx, itemcode: String(item.itemcode), spec: prefill});
+        }
+      }
+    }
+  }
+  return found;
+}
+
+function hasBankSource(prefill) {
+  return prefill?.bank !== undefined && prefill?.bank !== null;
+}
+
+const fill = (text, entry) => (typeof text === 'string' ? text.split('{entry}').join(entry) : text);
+
+/** The prompt items one list source generates from the entries of the drawn list. */
+export function generateListItems({item, spec, list}) {
+  const {prefill: _prefill, mediaitems: _mediaitems, itemcode: _itemcode, ...template} = item;
+  const format = spec.itemcodeFormat ?? '{n}';
+  return list.entries.map((entry, index) => {
+    const generated = {
+      ...template,
+      itemcode: format.split('{n}').join(String(index + 1)),
+      mediaitems: (spec.mediaitems ?? []).map((mediaitem) => {
+        const filled = {...mediaitem};
+        for (const field of ['text', 'src', 'alt']) {
+          if (typeof mediaitem[field] === 'string') {
+            filled[field] = fill(mediaitem[field], entry);
+          }
+        }
+        return filled;
+      }),
+    };
+    if (spec.recinstructions !== undefined && spec.recinstructions !== null) {
+      generated.recinstructions = {recinstructions: spec.recinstructions};
+    }
+    return generated;
+  });
+}
+
+/**
+ * Resolves every list source of a script. Specs sharing a `link` use one list id, resolved against
+ * each spec's own source (paired word and sentence lists). The list is picked by the draw key
+ * (`fixedBy`, default SESSION) and the placeholder's itemcode, so it is stable for the key and new
+ * for a new session or a redraw.
+ *
+ * @param context `{lookupSource, sessionId, speaker, scriptId, scriptVersion}`; `lookupSource(id)`
+ *   returns `{lists: [{id, entries}]}` or null.
+ * @returns `{script, trace}`; trace is null when the script has no list source.
+ */
+export function resolveListSources(script, context) {
+  const sources = listSourcesOf(script);
+  if (sources.length === 0) {
+    return {script, trace: null};
+  }
+  const {lookupSource, sessionId, speaker = null, scriptId = null, scriptVersion = null} = context;
+  const resolved = structuredClone(script);
+  const linkedIds = new Map();
+  const trace = [];
+  const byGroup = new Map();
+  for (const entry of sources) {
+    const doc = lookupSource(entry.spec.source);
+    const lists = Array.isArray(doc?.lists) ? doc.lists : [];
+    if (lists.length === 0) {
+      throw new Error(`list source ${entry.spec.source} does not exist or holds no lists`);
+    }
+    const key = drawKey(entry.spec.fixedBy, {sessionId, speaker, scriptId, scriptVersion});
+    const link = entry.spec.link === undefined || entry.spec.link === null || entry.spec.link === '' ? null : String(entry.spec.link);
+    let list = link === null ? undefined : lists.find((candidate) => String(candidate.id) === linkedIds.get(link));
+    let linked = list !== undefined;
+    if (list === undefined) {
+      const random = randomFrom(seedFrom(key, link ?? entry.itemcode, entry.spec.source));
+      list = lists[Math.floor(random() * lists.length)];
+      if (link !== null) {
+        linkedIds.set(link, String(list.id));
+      }
+    }
+    const item = script.sections[entry.sectionIdx].groups[entry.groupIdx].promptItems[entry.itemIdx];
+    const generated = generateListItems({item, spec: entry.spec, list});
+    trace.push({
+      kind: 'list',
+      placeholderItemcode: entry.itemcode,
+      source: entry.spec.source,
+      list: String(list.id),
+      link,
+      linked,
+      fixedBy: entry.spec.fixedBy ?? 'SESSION',
+      key,
+      items: generated.map((made, index) => ({itemcode: made.itemcode, entry: list.entries[index]})),
+      drawnForVersion: scriptVersion,
+    });
+    const groupKey = `${entry.sectionIdx}:${entry.groupIdx}`;
+    const replacements = byGroup.get(groupKey) ?? [];
+    replacements.push({itemIdx: entry.itemIdx, generated});
+    byGroup.set(groupKey, replacements);
+  }
+  for (const [groupKey, replacements] of byGroup) {
+    const [sectionIdx, groupIdx] = groupKey.split(':').map(Number);
+    const items = resolved.sections[sectionIdx].groups[groupIdx].promptItems;
+    for (const {itemIdx, generated} of [...replacements].sort((a, b) => b.itemIdx - a.itemIdx)) {
+      items.splice(itemIdx, 1, ...generated);
+    }
+  }
+  return {script: resolved, trace};
+}

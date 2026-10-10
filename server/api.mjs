@@ -48,6 +48,9 @@ import {validateScript} from './validate.mjs';
 import {multipartBoundary, readMultipart} from './multipart.mjs';
 import {concatWavFiles, probeWav, readWavSection, WavError} from './wav.mjs';
 
+const SESSION_PATCHABLE = new Set(['status', 'loadedDate', 'startedTrainingDate', 'startedDate', 'completedDate', 'restartedDate', 'replayLog', 'speaker']);
+const SESSION_STATUS_ORDER = ['CREATED', 'LOADED', 'STARTED_TRAINING', 'STARTED', 'COMPLETED'];
+
 const AUDIO_TYPES = {'.wav': 'audio/wav', '.webm': 'audio/webm', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg'};
 
 /** How long a deferred concat may stay incomplete before the log warns about it. */
@@ -710,6 +713,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
         redraw: session.redraw ?? 0,
         prefills: session.prefills ?? {},
         bankDraws: session.bankDraws ?? [],
+        listDraws: session.listDraws ?? [],
       };
     }
 
@@ -718,6 +722,9 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
       const session = requireFound(store.session(sessionId), `session ${sessionId}`);
       if (session.status !== 'CREATED') {
         throw new RequestError(409, `session ${sessionId} has started; its draw is fixed`, {code: 'SESSION_ALREADY_STARTED'});
+      }
+      if (store.recordingFilesOfSession(sessionId).length > 0) {
+        throw new RequestError(409, `session ${sessionId} has recordings; its draw is fixed`, {code: 'SESSION_ALREADY_STARTED'});
       }
       const candidate = {...session, redraw: (session.redraw ?? 0) + 1};
       const resolved = store.resolveSessionDraws(candidate);
@@ -856,7 +863,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
     }
 
     function getSession(sessionId) {
-      const session = store.session(sessionId) ?? autoCreate(sessionId);
+      const session = store.relaunchSession(sessionId) ?? autoCreate(sessionId);
       return sendJson(res, 200, requireFound(session, `session ${sessionId}`));
     }
 
@@ -900,10 +907,39 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
       if (projectId !== null && String(session.project) !== projectId) {
         throw new RequestError(404, `session ${sessionId} does not belong to project ${projectId}`);
       }
-      const patch = await readJsonBody(req);
+      const patch = sessionPatchOf(session, await readJsonBody(req));
       const updated = store.patchSession(sessionId, patch);
       log(`patched session ${sessionId}: ${JSON.stringify(patch)}`);
       return await sendJson(res, 200, updated);
+    }
+
+    /**
+     * What a recorder may change on its session: progress (status moves forward only), the dates that
+     * go with it, the replay log and the speaker. `prefills` is the receiver's own record of the draw
+     * now, so an older recorder that still sends it is ignored rather than allowed to rewrite the trace.
+     * Anything else (script, bankDraws, sealed, type…) is the planner's or the receiver's, never the
+     * recorder's: refusing it keeps the draw trace and the recordings in agreement.
+     */
+    function sessionPatchOf(session, body) {
+      if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+        throw new RequestError(400, 'session patch must be a JSON object');
+      }
+      const {prefills: _ignored, ...patch} = body;
+      const refused = Object.keys(patch).filter((key) => !SESSION_PATCHABLE.has(key));
+      if (refused.length > 0) {
+        throw new RequestError(400, `session fields not patchable by the recorder: ${refused.join(', ')}`, {code: 'SESSION_FIELD_NOT_PATCHABLE'});
+      }
+      if (patch.status !== undefined) {
+        const from = SESSION_STATUS_ORDER.indexOf(session.status ?? 'CREATED');
+        const to = SESSION_STATUS_ORDER.indexOf(patch.status);
+        if (to < 0) {
+          throw new RequestError(400, `unknown session status ${patch.status}`, {code: 'SESSION_STATUS_UNKNOWN'});
+        }
+        if (to < from) {
+          throw new RequestError(409, `session ${session.sessionId} is ${session.status}; it cannot go back to ${patch.status}`, {code: 'SESSION_STATUS_REGRESSION'});
+        }
+      }
+      return patch;
     }
 
     // -------------------------------------------------------------- recording file list and audio
