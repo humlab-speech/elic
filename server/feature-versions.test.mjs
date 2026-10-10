@@ -98,3 +98,17 @@ test('the table and the recorder version stay in step with the library', () => {
   const theirs = table(read('../projects/speechrecorderng/src/lib/speechrecorder/script/feature-versions.ts'));
   assert.deepEqual(FEATURE_VERSIONS, theirs, 'a feature added on one side must be added on the other');
 });
+
+test('the shared floors corpus: the same script, the same features, on both sides', () => {
+  const corpus = JSON.parse(readFileSync(new URL('../doc/script-editor/checks/floors.corpus.json', import.meta.url), 'utf8'));
+  const scripts = [
+    ...corpus.cases.map((entry) => ({note: entry.note, script: withItem(entry.item), features: entry.features})),
+    ...corpus.documents.map((entry) => ({note: entry.note, script: entry.script, features: entry.features})),
+  ];
+  for (const {note, script, features} of scripts) {
+    assert.deepEqual(featuresUsed(script), features, note);
+    const floors = features.map((feature) => FEATURE_VERSIONS[feature]);
+    const highest = floors.reduce((best, floor) => (best === null || compareVersions(floor, best) > 0 ? floor : best), null);
+    assert.equal(minRecorderVersionFor(script).minRecorderVersion, highest, note);
+  }
+});

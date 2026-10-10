@@ -1,0 +1,163 @@
+{
+  "note": "Which features a script uses, and so which floor it needs. Run by server/feature-versions.test.mjs and the library's feature-versions.spec.ts; the expected floor is the highest FEATURE_VERSIONS entry over `features`.",
+  "cases": [
+    {
+      "note": "no feature",
+      "item": {
+        "itemcode": "1"
+      },
+      "features": []
+    },
+    {
+      "note": "a prefill source",
+      "item": {
+        "itemcode": "1",
+        "prefill": {
+          "source": "x"
+        }
+      },
+      "features": [
+        "prefill"
+      ]
+    },
+    {
+      "note": "a null prefill is not a prefill",
+      "item": {
+        "itemcode": "1",
+        "prefill": null
+      },
+      "features": []
+    },
+    {
+      "note": "a null playback is not a playback",
+      "item": {
+        "itemcode": "1",
+        "playback": null
+      },
+      "features": []
+    },
+    {
+      "note": "a playback modifier",
+      "item": {
+        "itemcode": "1",
+        "playback": {
+          "when": "DURING"
+        }
+      },
+      "features": [
+        "playback"
+      ]
+    },
+    {
+      "note": "both",
+      "item": {
+        "itemcode": "1",
+        "prefill": {
+          "source": "x"
+        },
+        "playback": {
+          "when": "DURING"
+        }
+      },
+      "features": [
+        "playback",
+        "prefill"
+      ]
+    },
+    {
+      "note": "a bank source without playback",
+      "item": {
+        "itemcode": "1",
+        "prefill": {
+          "bank": {
+            "bank": "b",
+            "count": 1,
+            "itemcodePrefix": "P"
+          }
+        }
+      },
+      "features": [
+        "prefill"
+      ]
+    },
+    {
+      "note": "a bank source whose items carry playback",
+      "item": {
+        "itemcode": "1",
+        "prefill": {
+          "bank": {
+            "bank": "b",
+            "count": 1,
+            "itemcodePrefix": "P",
+            "playback": {
+              "when": "PRERECORDING"
+            }
+          }
+        }
+      },
+      "features": [
+        "playback",
+        "prefill"
+      ]
+    },
+    {
+      "note": "a bank source with a null playback",
+      "item": {
+        "itemcode": "1",
+        "prefill": {
+          "bank": {
+            "bank": "b",
+            "count": 1,
+            "itemcodePrefix": "P",
+            "playback": null
+          }
+        }
+      },
+      "features": [
+        "prefill"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "note": "no sections",
+      "script": {},
+      "features": []
+    },
+    {
+      "note": "a feature in the second section",
+      "script": {
+        "sections": [
+          {
+            "groups": [
+              {
+                "promptItems": [
+                  {
+                    "itemcode": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "groups": [
+              {
+                "promptItems": [
+                  {
+                    "itemcode": "2",
+                    "playback": {
+                      "when": "DURING"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "features": [
+        "playback"
+      ]
+    }
+  ]
+}

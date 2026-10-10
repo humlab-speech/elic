@@ -69,10 +69,14 @@ export function featuresUsed(script) {
   for (const section of script?.sections ?? []) {
     for (const group of section.groups ?? []) {
       for (const item of group.promptItems ?? []) {
-        if (item?.prefill !== undefined) {
+        if (item?.prefill != null) {
           used.add('prefill');
+          // The items a bank source generates carry its `playback`, so the recorder needs the modifier too.
+          if (item.prefill.bank?.playback != null) {
+            used.add('playback');
+          }
         }
-        if (item?.playback !== undefined) {
+        if (item?.playback != null) {
           used.add('playback');
         }
       }

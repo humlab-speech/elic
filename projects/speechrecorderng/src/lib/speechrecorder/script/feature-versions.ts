@@ -64,6 +64,10 @@ export function featuresUsed(script: Script | null | undefined): Array<string> {
       for (const item of (group?.promptItems ?? []) as Array<PromptItem>) {
         if (item?.prefill !== undefined && item.prefill !== null) {
           used['prefill'] = true;
+          // The items a bank source generates carry its `playback`, so the recorder needs the modifier too.
+          if (item.prefill.bank?.playback != null) {
+            used['playback'] = true;
+          }
         }
         if (item?.playback !== undefined && item.playback !== null) {
           used['playback'] = true;

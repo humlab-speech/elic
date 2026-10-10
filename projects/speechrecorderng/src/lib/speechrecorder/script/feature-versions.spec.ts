@@ -7,6 +7,7 @@
 import {VERSION} from '../../spr.module.version';
 import {FEATURE_VERSIONS, compareVersions, featuresUsed, minRecorderVersionFor, supportsRecorderVersion} from './feature-versions';
 import {PromptItem, Script} from './script';
+import floorsCorpus from '../../../../../../doc/script-editor/checks/floors.corpus.json';
 
 const scriptOf = (item: Partial<PromptItem>, overrides: Partial<Script> = {}): Script => ({
   sections: [{mode: 'MANUAL', promptphase: 'IDLE', order: 'SEQUENTIAL', training: false,
@@ -47,5 +48,18 @@ describe('feature versions', () => {
     expect(supportsRecorderVersion(scriptOf({}, {minRecorderVersion: '9.9.9'}), VERSION)).toBe(false);
     // A declared floor wins over the computed one.
     expect(supportsRecorderVersion(scriptOf({playback: {when: 'DURING'}}, {minRecorderVersion: '1.0.0'}), '1.0.0')).toBe(true);
+  });
+
+  it('agrees with the shared floors corpus the server runs too', () => {
+    const scripts: Array<{note: string; script: Script; features: Array<string>}> = [
+      ...floorsCorpus.cases.map((entry) => ({note: entry.note, script: scriptOf(entry.item as Partial<PromptItem>), features: entry.features})),
+      ...floorsCorpus.documents.map((entry) => ({note: entry.note, script: entry.script as unknown as Script, features: entry.features})),
+    ];
+    for (const {note, script, features} of scripts) {
+      expect(featuresUsed(script)).withContext(note).toEqual(features);
+      const floors = features.map((feature) => FEATURE_VERSIONS[feature]);
+      const highest = floors.reduce<string | null>((best, floor) => (best === null || compareVersions(floor, best) > 0 ? floor : best), null);
+      expect(minRecorderVersionFor(script)).withContext(note).toBe(highest);
+    }
   });
 });
