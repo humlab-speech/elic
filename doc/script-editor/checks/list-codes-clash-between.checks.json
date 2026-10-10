@@ -1,0 +1,85 @@
+{
+  "note": "E15: two list sources generate the same codes (the default format {n} on both).",
+  "lists": {
+    "words": {
+      "listId": "words",
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "d",
+            "e"
+          ]
+        }
+      ]
+    }
+  },
+  "draft": {
+    "name": "list-codes-clash-between",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "6",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "words",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ]
+                }
+              },
+              {
+                "itemcode": "7",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "words",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "id": "E15",
+      "path": "sections[0].groups[0].promptItems[1].prefill.itemcodeFormat"
+    }
+  ]
+}

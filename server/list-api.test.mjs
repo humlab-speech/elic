@@ -54,6 +54,7 @@ test('a legacy flat list works, is not a script, is guarded while used, and move
     assert.deepEqual(scripts.map((row) => row.scriptId), ['uses'], 'a list source is not a script');
     const [row] = await (await fetch(`${base}/project/demo/list`)).json();
     assert.equal(row.legacy, true);
+    assert.deepEqual(row.shape, [{id: '1', entries: 2}, {id: '2', entries: 2}]);
     assert.equal(row.usedBy[0].scriptId, 'uses');
 
     const refused = await fetch(`${base}/project/demo/list/flat-words`, {method: 'DELETE'});

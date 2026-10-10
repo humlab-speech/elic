@@ -1,0 +1,68 @@
+{
+  "note": "E12: a list source with no name.",
+  "lists": {
+    "words": {
+      "listId": "words",
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "d",
+            "e"
+          ]
+        }
+      ]
+    }
+  },
+  "draft": {
+    "name": "list-source-empty-name",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "6",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ],
+                  "itemcodeFormat": "6.{n}"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "id": "E12",
+      "path": "sections[0].groups[0].promptItems[0].prefill.source"
+    }
+  ]
+}

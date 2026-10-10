@@ -1289,6 +1289,8 @@ export class Store {
         name: typeof doc?.name === 'string' && doc.name.trim() !== '' ? doc.name : String(id),
         lists: lists.length,
         entries: lists.reduce((sum, list) => sum + (Array.isArray(list?.entries) ? list.entries.length : 0), 0),
+        // what the editor's checks need (ids and sizes) without shipping every entry
+        shape: lists.map((list) => ({id: String(list?.id), entries: Array.isArray(list?.entries) ? list.entries.length : 0})),
         legacy: !existsSync(this.listPath(id)),
         usedBy: refs.get(String(id)) ?? [],
       };

@@ -1,0 +1,87 @@
+{
+  "note": "E13: one prefill declares a list source and a bank source.",
+  "banks": {
+    "small": {
+      "bankId": "small",
+      "title": "Small",
+      "source": "PROJECT",
+      "items": [
+        {
+          "bankItemId": "s1",
+          "text": "ett"
+        }
+      ]
+    }
+  },
+  "lists": {
+    "words": {
+      "listId": "words",
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "d",
+            "e"
+          ]
+        }
+      ]
+    }
+  },
+  "draft": {
+    "name": "list-source-and-bank",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "6",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "words",
+                  "itemcodeFormat": "6.{n}",
+                  "bank": {
+                    "bank": "small",
+                    "bankSource": "PROJECT",
+                    "count": 1,
+                    "itemcodePrefix": "RB"
+                  },
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "id": "E13",
+      "path": "sections[0].groups[0].promptItems[0].prefill"
+    }
+  ]
+}

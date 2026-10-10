@@ -24,14 +24,18 @@ test('every corpus case matches the server catalogue', () => {
   // failed a comparison that had nothing to do with the file set.
   const expectedNames = ['bank-count', 'bank-missing', 'bank-prefix-clash', 'clean', 'duplicate-itemcode',
     'empty-item', 'empty-script', 'missing-itemcode', 'negative-timing', 'playback-bounds',
-    'playback-without-audio', 'bank-count-cap', 'bank-prefix-across-sections'];
+    'playback-without-audio', 'bank-count-cap', 'bank-prefix-across-sections',
+    'list-clean', 'list-source-missing', 'list-source-empty-name', 'list-source-and-bank', 'list-format-without-n',
+    'list-codes-clash', 'list-codes-clash-between'];
   assert.deepEqual(files.map((name) => name.replace(/\.checks\.json$/, '')).sort(),
     [...expectedNames].sort(), 'the corpus file set drifted from the editor\'s CORPUS_FILES');
   for (const file of files) {
     const corpusCase = JSON.parse(readFileSync(join(CORPUS_DIR, file), 'utf8'));
     const banks = corpusCase.banks ?? {};
     const lookupBank = (bankId) => (Object.prototype.hasOwnProperty.call(banks, bankId) ? banks[bankId] : null);
-    const actual = validateScript(corpusCase.draft, {lookupBank}).map(key).sort();
+    const listDocs = corpusCase.lists;
+    const lookupList = listDocs === undefined ? null : (listId) => (Object.prototype.hasOwnProperty.call(listDocs, listId) ? listDocs[listId] : null);
+    const actual = validateScript(corpusCase.draft, {lookupBank, lookupList}).map(key).sort();
     const expected = corpusCase.expect.map(key).sort();
     assert.deepEqual(actual, expected, `${file}: ${corpusCase.note ?? ''}`);
   }

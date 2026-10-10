@@ -1,0 +1,68 @@
+{
+  "note": "E14: an itemcodeFormat without {n} gives every generated item the same code (and so E15 against itself is not reported twice).",
+  "lists": {
+    "words": {
+      "listId": "words",
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "d",
+            "e"
+          ]
+        }
+      ]
+    }
+  },
+  "draft": {
+    "name": "list-format-without-n",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "6",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "words",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ],
+                  "itemcodeFormat": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "id": "E14",
+      "path": "sections[0].groups[0].promptItems[0].prefill.itemcodeFormat"
+    }
+  ]
+}

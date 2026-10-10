@@ -353,7 +353,7 @@ and expanded into one prompt item per entry; placeholders sharing a `link` use t
 drawing (§4.1), so the recorder never fetches a list.
 
 ```
-GET    project/{p}/list              -> [{listId, name, lists, entries, legacy, usedBy:[{scriptId, draft|version}]}]
+GET    project/{p}/list              -> [{listId, name, lists, entries, shape:[{id, entries}], legacy, usedBy:[{scriptId, draft|version}]}]
 POST   project/{p}/list {name?, listId?, lists}   -> 201 {listId, etag}
 GET    project/{p}/list/{id}         -> the stored bytes, with ETag
 PUT    project/{p}/list/{id}         -> 200/201 {listId, etag}; If-Match to change, If-None-Match: * to create

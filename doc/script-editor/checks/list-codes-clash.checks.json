@@ -1,0 +1,77 @@
+{
+  "note": "E15: the longest list generates 6.1…6.3 and a fixed item already uses 6.2.",
+  "lists": {
+    "words": {
+      "listId": "words",
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "d",
+            "e"
+          ]
+        }
+      ]
+    }
+  },
+  "draft": {
+    "name": "list-codes-clash",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "6.2",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "fixed"
+                  }
+                ]
+              },
+              {
+                "itemcode": "6",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "words",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ],
+                  "itemcodeFormat": "6.{n}"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "expect": [
+    {
+      "id": "E15",
+      "path": "sections[0].groups[0].promptItems[1].prefill.itemcodeFormat"
+    }
+  ]
+}

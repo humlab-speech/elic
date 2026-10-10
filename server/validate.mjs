@@ -14,7 +14,7 @@ const TIMING_FIELDS = ['prerecdelay', 'prerecording', 'recduration', 'duration',
 const NON_NEGATIVE_PLAYBACK_FIELDS = ['gap', 'maxReplays'];
 
 /** @returns {Array<{id: string, path: string, severity: 'error', message: string}>} */
-export function validateScript(script, {lookupBank = null} = {}) {
+export function validateScript(script, {lookupBank = null, lookupList = null} = {}) {
   const findings = [];
   const add = (id, path, message) => findings.push({id, path, severity: 'error', message});
   const sections = Array.isArray(script?.sections) ? script.sections : [];
@@ -25,6 +25,8 @@ export function validateScript(script, {lookupBank = null} = {}) {
   }
   const seenCodes = new Map();
   const reservedRanges = [];
+  const listSpecs = [];
+  const fixedCodes = [];
 
   sections.forEach((section, sectionIdx) => {
     const groups = Array.isArray(section?.groups) ? section.groups : [];
@@ -76,6 +78,36 @@ export function validateScript(script, {lookupBank = null} = {}) {
           } else if (Number.isInteger(count) && count >= 1) {
             reservedRanges.push({prefix, count, path: bankPath, placeholder: itemcode});
           }
+        }
+
+        // E12–E14 — a list source (the STI lists) must name an existing list source and a usable itemcode format.
+        const hasBank = item?.prefill?.bank !== undefined && item?.prefill?.bank !== null;
+        const hasSource = item?.prefill?.source !== undefined && item?.prefill?.source !== null;
+        if (hasBank && hasSource) {
+          add('E13', `${path}.prefill`, 'The item declares both a list source and a bank source; use one.');
+        }
+        if (hasSource && !hasBank) {
+          const source = item.prefill.source;
+          const spec = {path, itemcode, format: item.prefill.itemcodeFormat ?? '{n}', doc: null};
+          if (typeof source !== 'string' || source.trim() === '') {
+            add('E12', `${path}.prefill.source`, 'The item draws from a list source but none is named.');
+          } else if (typeof lookupList === 'function') {
+            const doc = lookupList(source);
+            if (doc === null || doc === undefined) {
+              add('E12', `${path}.prefill.source`, `List source ${source} does not exist.`);
+            } else if (!Array.isArray(doc.lists) || doc.lists.length === 0) {
+              add('E12', `${path}.prefill.source`, `List source ${source} holds no lists.`);
+            } else {
+              spec.doc = doc;
+            }
+          }
+          if (typeof spec.format !== 'string' || !spec.format.includes('{n}')) {
+            add('E14', `${path}.prefill.itemcodeFormat`, 'itemcodeFormat must contain {n}, or every generated item gets the same itemcode.');
+            spec.format = null;
+          }
+          listSpecs.push(spec);
+        } else if (!hasBank && itemcode !== '') {
+          fixedCodes.push({code: itemcode, path});
         }
 
         // E06/E07 — what the item shows and what it plays (D-V = C: the sound is an audio mediaitem).
@@ -141,5 +173,44 @@ export function validateScript(script, {lookupBank = null} = {}) {
       }
     }
   }
+  // E15 — the codes a list source generates (1…the longest list) must not meet a fixed code, a bank range or each other.
+  const claimed = new Map(fixedCodes.map(({code, path}) => [code, path]));
+  for (const spec of listSpecs) {
+    if (spec.doc === null || spec.format === null) {
+      continue;
+    }
+    const longest = Math.max(...spec.doc.lists.map((list) => (Array.isArray(list?.entries) ? list.entries.length : 0)));
+    const mine = [];
+    for (let n = 1; n <= longest; n++) {
+      mine.push(spec.format.split('{n}').join(String(n)));
+    }
+    let clash = null;
+    for (const code of mine) {
+      const other = claimed.get(code) ?? bankRangeOf(reservedRanges, code);
+      if (other !== undefined && other !== null) {
+        clash = {code, other};
+        break;
+      }
+    }
+    if (clash !== null) {
+      add('E15', `${spec.path}.prefill.itemcodeFormat`, `Generated itemcode ${clash.code} is also used at ${clash.other}.`);
+    }
+    for (const code of mine) {
+      if (!claimed.has(code)) {
+        claimed.set(code, `${spec.path}.prefill`);
+      }
+    }
+  }
   return findings;
+}
+
+function bankRangeOf(ranges, code) {
+  for (const range of ranges) {
+    const escaped = range.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`^${escaped}(\\d{3,})$`).exec(code);
+    if (match !== null && Number(match[1]) <= range.count) {
+      return range.path;
+    }
+  }
+  return null;
 }

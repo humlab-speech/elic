@@ -110,6 +110,8 @@ test('publish gates on errors, freezes versions and supports restore and duplica
 
 test('publish stamps the floor of the features the script uses', async () => {
   await withServer(async ({base}) => {
+    // a prefill names a list source, and publishing checks that it exists (E12)
+    await fetch(`${base}/project/demo/list`, jsonRequest('POST', {listId: 'sti-wordlists', lists: [{id: '1', entries: ['a']}]}));
     const withPrefill = await createScript(base, 'Prefill');
     const prefillItem = {
       itemcode: '1',

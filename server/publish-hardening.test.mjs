@@ -67,3 +67,18 @@ test('E05 treats a prefix as text, not as a pattern', () => {
   assert.equal(e05(withPrefix('P(', 'P(001')).length, 1);
   assert.equal(e05(withPrefix('A.', 'AB002')).length, 0);
 });
+
+test('publish is refused for a list source that does not exist, and passes once it does', async () => {
+  await withServer(async ({base}) => {
+    const {scriptId, etag} = await create(base);
+    const placeholder = {itemcode: '6', mediaitems: [{mimetype: 'text/plain', text: 'Read'}],
+      prefill: {source: 'sti', itemcodeFormat: '6.{n}', mediaitems: [{mimetype: 'text/plain', text: '{entry}'}]}};
+    const next = await put(base, scriptId, script([placeholder]), etag);
+    const refused = await publish(base, scriptId, {fromDraftEtag: next}, 'L1');
+    assert.equal(refused.status, 409);
+    assert.deepEqual((await refused.json()).details.checks.map((check) => check.id), ['E12']);
+
+    await fetch(`${base}/project/demo/list/sti`, {method: 'PUT', headers: {'content-type': 'application/json', 'if-none-match': '*'}, body: JSON.stringify({lists: [{id: '1', entries: ['a', 'b']}]})});
+    assert.equal((await publish(base, scriptId, {fromDraftEtag: next}, 'L2')).status, 201);
+  });
+});

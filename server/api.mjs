@@ -344,7 +344,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
         const {bytes} = requireDraftPrecondition(req, scriptId, provided);
         const text = bytes.toString('utf8');
         const value = JSON.parse(text);
-        const findings = validateScript(value, {lookupBank: (bankId) => store.bank(bankId)});
+        const findings = validateScript(value, {lookupBank: (bankId) => store.bank(bankId), lookupList: (listId) => store.listSource(listId)});
         if (findings.length > 0) {
           throw new RequestError(409, 'The script has errors and was not published.', {
             code: 'PUBLISH_REJECTED',
