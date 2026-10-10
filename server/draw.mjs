@@ -11,6 +11,7 @@
  * on every runtime. Nothing here touches the browser.
  */
 import {matchesFilter} from './bank.mjs';
+import {contentHash} from './lists.mjs';
 
 const POSITION_WIDTH = 3;
 
@@ -203,6 +204,7 @@ export function resolveBankSources(script, context) {
       refilled,
       skippedRecorded: skip,
       speakerFallback: entry.source.fixedBy === 'SPEAKER' && (speaker === null || speaker === undefined),
+      bankHash: contentHash(bank.items ?? []),
       drawnForVersion: scriptVersion,
     });
     const groupKey = `${entry.sectionIdx}:${entry.groupIdx}`;
@@ -323,6 +325,7 @@ export function resolveListSources(script, context) {
       fixedBy: entry.spec.fixedBy ?? 'SESSION',
       key,
       items: generated.map((made, index) => ({itemcode: made.itemcode, entry: list.entries[index]})),
+      sourceHash: contentHash(lists),
       drawnForVersion: scriptVersion,
     });
     const groupKey = `${entry.sectionIdx}:${entry.groupIdx}`;

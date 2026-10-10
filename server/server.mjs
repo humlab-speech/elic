@@ -29,7 +29,7 @@ const store = new Store({dataDir: options.data, seedDir: options.seed, log, reco
 if (options.migrate || options.gc) {
   if (options.migrate) {
     const summary = store.migrateLegacyTrees();
-    log(`migrate: ${summary.scripts} script(s) examined, ${summary.imported} legacy script(s) imported as version 1`);
+    log(`migrate: ${summary.scripts} script(s) examined, ${summary.imported} legacy script(s) imported as version 1, ${summary.lists} list source(s) moved to list/`);
   }
   if (options.gc) {
     const summary = store.gc({media: options.gcMedia, journalKeep: options.gcJournal, uploadsMaxAgeDays: options.gcUploads});

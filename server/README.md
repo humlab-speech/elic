@@ -45,6 +45,7 @@ CI runs this and the other five jobs (`.github/workflows/tests.yml`).
 <data>/session/<id>.json              session; bank draws (bankDraws), list draws (listDraws, prefills) are recorded here
 <data>/recordingfile/<id>.{json,wav}  recording metadata and audio
 <data>/bank/<id>.json                 item banks (BUILTIN banks are read-only)
+<data>/list/<id>.json                 list sources: the lists a prefill source draws (a flat script/<id>.json with `lists` is the legacy place; --migrate moves it)
 <data>/uploads/                       runtime state: idempotency journal, chunk sessions, ids
 ```
 

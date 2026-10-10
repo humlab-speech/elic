@@ -440,7 +440,7 @@ Properties (all required unless noted):
  * recinstructions: string: Optional operator instruction of every generated item. Not set: the
    placeholder's own instruction is kept.
 
-The source document has this shape (`src/test/script/sti-wordlists.json`,
+The source document has this shape (`src/test/list/sti-wordlists.json`,
 `sti-sentencelists.json` and `sti-sentencelists-practice.json` ship the STI lists — 330 word
 lists of 66 entries, 330 sentence lists of the 10 evaluated sentences (`1:`–`10:`) and 330
 practice lists of the 2 try-out sentences (`A:`, `B:`); the list id being the STI list number.

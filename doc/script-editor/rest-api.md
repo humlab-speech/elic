@@ -345,6 +345,29 @@ A bank item's model recording is a project resource, fetched like any other
 a builtin bank's `audioSrc` is an ordinary project-relative path through the same resource route, and the client only
 ever uses the `audioSrc` it was given.
 
+### 3.5 List sources
+
+The word and sentence lists a `prefill.source` placeholder draws from (the STI lists). A list source is a document of
+its own, `{name?, lists: [{id, entries: [string…]}]}`, stored as `list/<id>.json`. One list is drawn per placeholder
+and expanded into one prompt item per entry; placeholders sharing a `link` use the same list id. The receiver does the
+drawing (§4.1), so the recorder never fetches a list.
+
+```
+GET    project/{p}/list              -> [{listId, name, lists, entries, legacy, usedBy:[{scriptId, draft|version}]}]
+POST   project/{p}/list {name?, listId?, lists}   -> 201 {listId, etag}
+GET    project/{p}/list/{id}         -> the stored bytes, with ETag
+PUT    project/{p}/list/{id}         -> 200/201 {listId, etag}; If-Match to change, If-None-Match: * to create
+DELETE project/{p}/list/{id}         -> 200, or 409 LIST_IN_USE {usedBy} while a draft or version names it
+```
+
+Writes follow the draft rules (§2.3): `428` without a precondition, `412 LIST_CONFLICT` with the current document when
+it is stale. A document with errors is refused with `400 LIST_INVALID` and `details.checks`: `L01` not a list source,
+`L02` no lists, `L03` a list without an id, `L04` a duplicate list id, `L05` an empty or non-string entry. A flat
+`script/<id>.json` with `lists` and no `sections` (where the lists used to live) is still read and is listed with
+`legacy: true`; `--migrate` moves it to `list/`. Neither place makes it a script: it is not in the script library.
+The draw trace and each recording's `draw` carry `sourceHash`, a digest of the lists that were read, so a later edit
+of the document is visible against the sessions that used the old content.
+
 ## 4. Draw resolution and the draw record
 
 ### 4.1 At session creation (server behaviour, not an editor call)
@@ -513,6 +536,8 @@ it, tier-2 preview cannot exist and only the editor-side mock remains.
 | GET | `project/{p}/session/{s}/draws` | the session trace (prefills + bankDraws) | M4 |
 | GET | `project/{p}/script/{id}/draws` | draw record, CSV | M4 |
 | POST | `project/{p}/session/{s}/draws/_redraw` | unstarted sessions only | M4 |
+| GET/POST | `project/{p}/list` | list sources (the lists a prefill source draws), library and create | — |
+| GET/PUT/DELETE | `project/{p}/list/{id}` | one list source, ETag; delete refused while a script names it | — |
 | POST | `project/{p}/media` | upload a playback clip | M3 |
 | GET | `project/{p}/media` | media list with `usedBy` | M3 |
 | DELETE | `project/{p}/media/{name}` | refused while published versions reference it — `{name}` is the basename of `src` | M3 |

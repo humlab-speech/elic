@@ -18,6 +18,7 @@ import {randomBytes} from 'node:crypto';
 import {dirname, join, resolve, sep} from 'node:path';
 import {RequestError} from './body.mjs';
 import {resolveBankSources, resolveListSources} from './draw.mjs';
+import {isListDoc} from './lists.mjs';
 import {etagOf} from './etag.mjs';
 import {RECORDER_VERSION, supportsRecorderVersion} from './feature-versions.mjs';
 import {loadOrCreateSalt, pseudonymiseSpeaker} from './pseudonym.mjs';
@@ -79,7 +80,7 @@ export class Store {
       cpSync(this.seedDir, this.dataDir, {recursive: true});
       this.log(`seeded ${this.dataDir} from ${this.seedDir}`);
     }
-    for (const dir of ['project', 'script', 'session', 'recordingfile', 'bank', 'uploads', 'uploads/tmp']) {
+    for (const dir of ['project', 'script', 'session', 'recordingfile', 'bank', 'list', 'uploads', 'uploads/tmp']) {
       mkdirSync(join(this.dataDir, dir), {recursive: true});
     }
     const swept = this.sweepTempFiles(this.dataDir);
@@ -291,7 +292,10 @@ export class Store {
     const ids = new Set();
     for (const name of readdirSync(dir)) {
       if (name.endsWith('.json')) {
-        ids.add(name.slice(0, -'.json'.length));
+        // A flat file that is a list source (the legacy place for the STI lists) is not a script.
+        if (!this.isFlatListSource(join(dir, name))) {
+          ids.add(name.slice(0, -'.json'.length));
+        }
       } else if (statSync(join(dir, name)).isDirectory()) {
         ids.add(name);
       }
@@ -435,7 +439,7 @@ export class Store {
       banks = resolveBankSources(doc, {...context, lookupBank: (bankId) => this.bank(bankId), recordedBankItemIds: recorded});
       // List sources (the STI word and sentence lists) are drawn here too, so the recorder receives
       // a script with nothing left to expand and every launch draws on the receiver.
-      lists = resolveListSources(banks.script, {...context, lookupSource: (sourceId) => this.script(sourceId)});
+      lists = resolveListSources(banks.script, {...context, lookupSource: (sourceId) => this.listSource(sourceId)});
     } catch (err) {
       throw new RequestError(409, `cannot resolve the session's draws: ${err.message}`, {code: 'BANK_SOURCE_UNRESOLVED'});
     }
@@ -1166,6 +1170,131 @@ export class Store {
   }
 
   /** Every bank, with `itemCount` normalised. */
+  // ---------------------------------------------------------------- list sources
+
+  listPath(id) {
+    return join(this.dataDir, 'list', `${this.segment(id)}.json`);
+  }
+
+  /** Whether a flat `script/<id>.json` is a list source; remembered per (mtime, size), so listing stays cheap. */
+  isFlatListSource(path) {
+    const stat = statSync(path);
+    const key = `${stat.mtimeMs}:${stat.size}`;
+    this._shapes ??= new Map();
+    const known = this._shapes.get(path);
+    if (known !== undefined && known.key === key) {
+      return known.isList;
+    }
+    let isList = false;
+    try {
+      isList = isListDoc(JSON.parse(readFileSync(path, 'utf8')));
+    } catch {
+      isList = false;
+    }
+    this._shapes.set(path, {key, isList});
+    return isList;
+  }
+
+  /** The file a list source is stored in: `list/<id>.json`, else the legacy flat script file. */
+  listFile(id) {
+    const own = this.listPath(id);
+    if (existsSync(own)) {
+      return own;
+    }
+    const flat = this.scriptPath(id);
+    return existsSync(flat) && this.isFlatListSource(flat) ? flat : null;
+  }
+
+  /** The stored bytes of a list source (the ETag hashes exactly these), or null. */
+  listBytes(id) {
+    const file = this.listFile(id);
+    return file === null ? null : readFileSync(file);
+  }
+
+  listSource(id) {
+    const file = this.listFile(id);
+    return file === null ? null : this.readJson(file);
+  }
+
+  listIds() {
+    const ids = new Set();
+    const dir = join(this.dataDir, 'list');
+    for (const name of existsSync(dir) ? readdirSync(dir) : []) {
+      if (name.endsWith('.json')) {
+        ids.add(name.slice(0, -'.json'.length));
+      }
+    }
+    const scripts = join(this.dataDir, 'script');
+    for (const name of readdirSync(scripts)) {
+      if (name.endsWith('.json') && this.isFlatListSource(join(scripts, name))) {
+        ids.add(name.slice(0, -'.json'.length));
+      }
+    }
+    return [...ids].sort(compareIds);
+  }
+
+  writeListText(id, text) {
+    this.writeText(this.listPath(id), text);
+  }
+
+  /** Removes a list source from wherever it is stored. */
+  deleteList(id) {
+    for (const file of [this.listPath(id), this.scriptPath(id)]) {
+      if (existsSync(file) && (file === this.listPath(id) || this.isFlatListSource(file))) {
+        unlinkSync(file);
+      }
+    }
+  }
+
+  /** The scripts that name each list source: `{scriptId, draft: true}` or `{scriptId, version}`. */
+  listReferences() {
+    const refs = new Map();
+    const scan = (doc, owner) => {
+      for (const section of doc?.sections ?? []) {
+        for (const group of section?.groups ?? []) {
+          for (const item of group?.promptItems ?? []) {
+            const source = item?.prefill?.source;
+            if (typeof source === 'string' && source !== '') {
+              const owners = refs.get(source) ?? [];
+              if (!owners.some((entry) => entry.scriptId === owner.scriptId && entry.draft === owner.draft && entry.version === owner.version)) {
+                owners.push(owner);
+              }
+              refs.set(source, owners);
+            }
+          }
+        }
+      }
+    };
+    for (const id of this.scriptIds()) {
+      const scriptId = this.scriptMeta(id)?.scriptId ?? coerceId(id);
+      scan(this.draft(id), {scriptId, draft: true});
+      for (const version of this.versions(id)) {
+        scan(this.version(id, version), {scriptId, version});
+      }
+      if (this.versions(id).length === 0) {
+        scan(this.readJson(this.scriptPath(id)), {scriptId, version: 1});
+      }
+    }
+    return refs;
+  }
+
+  /** The library: one row per list source, with who uses it. */
+  listLibrary() {
+    const refs = this.listReferences();
+    return this.listIds().map((id) => {
+      const doc = this.listSource(id);
+      const lists = Array.isArray(doc?.lists) ? doc.lists : [];
+      return {
+        listId: coerceId(id),
+        name: typeof doc?.name === 'string' && doc.name.trim() !== '' ? doc.name : String(id),
+        lists: lists.length,
+        entries: lists.reduce((sum, list) => sum + (Array.isArray(list?.entries) ? list.entries.length : 0), 0),
+        legacy: !existsSync(this.listPath(id)),
+        usedBy: refs.get(String(id)) ?? [],
+      };
+    });
+  }
+
   banks() {
     const dir = join(this.dataDir, 'bank');
     if (!existsSync(dir)) {
@@ -1197,7 +1326,8 @@ export class Store {
 
   /** Creates the per-script layout for every legacy flat script (idempotent). */
   migrateLegacyTrees() {
-    const summary = {scripts: 0, imported: 0};
+    const summary = {scripts: 0, imported: 0, lists: 0};
+    summary.lists = this.moveFlatListSources();
     for (const id of this.scriptIds()) {
       const before = this.scriptMeta(id);
       const meta = this.ensureScriptMeta(id);
@@ -1207,6 +1337,34 @@ export class Store {
       }
     }
     return summary;
+  }
+
+  /**
+   * Moves the list sources that sit among the scripts (`script/<id>.json` with `lists` and no `sections`) to
+   * `list/<id>.json`, byte for byte, and removes the script entry that only existed to hold them. Idempotent.
+   */
+  moveFlatListSources() {
+    let moved = 0;
+    const dir = join(this.dataDir, 'script');
+    for (const name of readdirSync(dir)) {
+      const file = join(dir, name);
+      if (!name.endsWith('.json') || !this.isFlatListSource(file)) {
+        continue;
+      }
+      const id = name.slice(0, -'.json'.length);
+      if (!existsSync(this.listPath(id))) {
+        this.writeListText(id, readFileSync(file));
+      }
+      unlinkSync(file);
+      this._shapes?.delete(file);
+      // A script entry that was made for it (archive/rename through the script API) holds nothing else.
+      const entry = join(dir, id);
+      if (existsSync(entry) && statSync(entry).isDirectory() && readdirSync(entry).every((child) => child === 'meta.json')) {
+        rmSync(entry, {recursive: true, force: true});
+      }
+      moved += 1;
+    }
+    return moved;
   }
 
   /** Keeps the newest `keep` draft revisions per script and drops anything older than `maxAgeDays`. */
@@ -1511,13 +1669,13 @@ function drawOf(session, itemcode) {
   for (const draw of session.bankDraws ?? []) {
     const item = (draw.items ?? []).find((entry) => entry.itemcode === itemcode);
     if (item !== undefined) {
-      return {kind: 'bank', bank: draw.bank, bankItemId: item.bankItemId ?? null, placeholder: draw.placeholderItemcode, key: draw.key, scriptVersion: draw.drawnForVersion ?? null, ...common};
+      return {kind: 'bank', bank: draw.bank, bankItemId: item.bankItemId ?? null, placeholder: draw.placeholderItemcode, key: draw.key, bankHash: draw.bankHash ?? null, scriptVersion: draw.drawnForVersion ?? null, ...common};
     }
   }
   for (const draw of session.listDraws ?? []) {
     const item = (draw.items ?? []).find((entry) => entry.itemcode === itemcode);
     if (item !== undefined) {
-      return {kind: 'list', source: draw.source, list: draw.list, entry: item.entry, placeholder: draw.placeholderItemcode, key: draw.key, scriptVersion: draw.drawnForVersion ?? null, ...common};
+      return {kind: 'list', source: draw.source, list: draw.list, entry: item.entry, placeholder: draw.placeholderItemcode, key: draw.key, sourceHash: draw.sourceHash ?? null, scriptVersion: draw.drawnForVersion ?? null, ...common};
     }
   }
   return null;

@@ -7,6 +7,7 @@
  *   GET    {base}project/{projectId}                                  project configuration
  *   GET    {base}project/{projectId}/{resource}                       project resources (images)
  *   GET    {base}script/{scriptId}                                    recording script
+ *   GET/POST {base}project/{p}/list, GET/PUT/DELETE project/{p}/list/{id}  list sources (the lists a prefill source draws)
  *   GET    {base}session/{sessionId}                                  session
  *   PATCH  {base}session/{sessionId}                                  session status/dates
  *   PATCH  {base}project/{p}/session/{s}                              same, project scoped
@@ -45,6 +46,7 @@ import {checkIfMatch, etagOf} from './etag.mjs';
 import {minRecorderVersionFor} from './feature-versions.mjs';
 import {durationMsOf, MEDIA_DIR, mimeTypeFor, sanitiseMediaName} from './media.mjs';
 import {validateScript} from './validate.mjs';
+import {validateListSource} from './lists.mjs';
 import {multipartBoundary, readMultipart} from './multipart.mjs';
 import {concatWavFiles, probeWav, readWavSection, WavError} from './wav.mjs';
 
@@ -169,6 +171,9 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
       }
       if (rest[1] === 'script') {
         return await scriptRoutes(req, res, url, rest.slice(2), projectId);
+      }
+      if (rest[1] === 'list') {
+        return await listRoutes(req, res, rest.slice(2));
       }
       if (rest[1] === 'bank') {
         return await bankRoutes(req, res, url, rest.slice(2), projectId);
@@ -385,6 +390,120 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
       const stored = store.restoreVersion(scriptId, String(body.version));
       res.setHeader('ETag', stored.etag);
       return await sendJson(res, 200, {scriptId, draftVersion: stored.draftVersion, etag: stored.etag});
+    }
+
+    // -------------------------------------------------------------- list sources
+
+    /**
+     * The word and sentence lists a `prefill.source` placeholder draws from. Written like a draft: the
+     * ETag is the sha256 of the stored bytes, `If-Match` guards an update and `If-None-Match: *` a create.
+     */
+    async function listRoutes(req, res, rest) {
+      if (rest.length === 0) {
+        if (req.method === 'GET') {
+          return await sendJson(res, 200, store.listLibrary());
+        }
+        if (req.method === 'POST') {
+          return await createList(req, res);
+        }
+        throw new RequestError(405, `${req.method} is not supported on project/{p}/list`);
+      }
+      if (rest.length !== 1) {
+        throw new RequestError(404, `unsupported list route ${rest.join('/')}`);
+      }
+      const listId = stripJsonSuffix(rest[0]);
+      if (req.method === 'GET') {
+        const bytes = store.listBytes(listId);
+        if (bytes === null) {
+          throw new RequestError(404, `list source ${listId} does not exist`);
+        }
+        return sendBytes(res, 200, bytes, etagOf(bytes));
+      }
+      if (req.method === 'PUT') {
+        return await putList(req, res, listId);
+      }
+      if (req.method === 'DELETE') {
+        return await deleteList(res, listId);
+      }
+      throw new RequestError(405, `${req.method} is not supported on project/{p}/list/{id}`);
+    }
+
+    function parseListBody(text) {
+      let value;
+      try {
+        value = JSON.parse(text);
+      } catch {
+        throw new RequestError(400, 'list source is not valid JSON');
+      }
+      const checks = validateListSource(value);
+      if (checks.length > 0) {
+        throw new RequestError(400, 'The list source has errors and was not saved.', {code: 'LIST_INVALID', details: {checks}});
+      }
+      return value;
+    }
+
+    async function putList(req, res, listId) {
+      const text = await readTextBody(req, {maxBytes: maxBody});
+      parseListBody(text);
+      const bytes = store.listBytes(listId);
+      const currentEtag = bytes === null ? null : etagOf(bytes);
+      const current = () => (bytes === null ? null : JSON.parse(bytes.toString('utf8')));
+      if (req.headers['if-none-match'] === '*') {
+        if (currentEtag !== null) {
+          throw new RequestError(412, 'The list source already exists.', {code: 'LIST_CONFLICT', details: {current: current(), currentEtag}});
+        }
+      } else {
+        const verdict = checkIfMatch(req, currentEtag);
+        if (verdict === 'missing') {
+          throw new RequestError(428, 'If-Match is required to change a list source', {code: 'PRECONDITION_REQUIRED'});
+        }
+        if (verdict === 'stale') {
+          throw new RequestError(412, 'The list source changed since you loaded it.', {code: 'LIST_CONFLICT', details: {current: current(), currentEtag}});
+        }
+      }
+      store.writeListText(listId, text);
+      // a legacy flat file is superseded by the list/ copy
+      if (store.listFile(listId) !== store.listPath(listId)) {
+        store.deleteList(listId);
+        store.writeListText(listId, text);
+      }
+      res.setHeader('ETag', etagOf(text));
+      return await sendJson(res, bytes === null ? 201 : 200, {listId, etag: etagOf(text)});
+    }
+
+    async function createList(req, res) {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const doc = {
+        ...(typeof body.name === 'string' && body.name.trim() !== '' ? {name: body.name.trim()} : {}),
+        lists: body.lists,
+      };
+      const checks = validateListSource(doc);
+      if (checks.length > 0) {
+        throw new RequestError(400, 'The list source has errors and was not saved.', {code: 'LIST_INVALID', details: {checks}});
+      }
+      const taken = new Set(store.listIds());
+      const requested = typeof body.listId === 'string' && body.listId.trim() !== '' ? body.listId.trim() : null;
+      if (requested !== null && taken.has(requested)) {
+        throw new RequestError(409, `list source ${requested} already exists`, {code: 'LIST_EXISTS'});
+      }
+      const listId = requested ?? bankIdFor(doc.name ?? 'list', taken);
+      const text = `${JSON.stringify(doc, null, 2)}\n`;
+      store.writeListText(listId, text);
+      res.setHeader('ETag', etagOf(text));
+      res.setHeader('Location', `list/${listId}`);
+      return await sendJson(res, 201, {listId, etag: etagOf(text)});
+    }
+
+    async function deleteList(res, listId) {
+      if (store.listBytes(listId) === null) {
+        throw new RequestError(404, `list source ${listId} does not exist`);
+      }
+      const usedBy = store.listReferences().get(listId) ?? [];
+      if (usedBy.length > 0) {
+        throw new RequestError(409, `list source ${listId} is named by a script`, {code: 'LIST_IN_USE', details: {usedBy}});
+      }
+      store.deleteList(listId);
+      return await sendJson(res, 200, {listId, deleted: true});
     }
 
     // -------------------------------------------------------------- item banks
