@@ -1,6 +1,6 @@
 {
   "name": "speechrecorderng",
-  "version": "3.11.26",
+  "version": "3.11.27",
   "license": "MIT",
   "peerDependencies": {
     "@angular/animations": "~20.3.33",

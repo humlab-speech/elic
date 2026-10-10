@@ -26,15 +26,15 @@ test('featuresUsed finds prefill and playback modifiers', () => {
 
 test('minRecorderVersionFor maps known features and reports unknown ones', () => {
   const prefill = minRecorderVersionFor(withItem({itemcode: '1', prefill: {source: 'x'}}));
-  assert.equal(prefill.minRecorderVersion, '3.11.26');
+  assert.equal(prefill.minRecorderVersion, '3.11.27');
   assert.deepEqual(prefill.unknownFeatures, []);
 
   const playback = minRecorderVersionFor(withItem({itemcode: '1', playback: {when: 'DURING'}}));
-  assert.equal(playback.minRecorderVersion, RECORDER_VERSION);
+  assert.equal(playback.minRecorderVersion, '3.11.27');
   assert.deepEqual(playback.unknownFeatures, []);
 
   const mixed = minRecorderVersionFor(withItem({itemcode: '1', prefill: {source: 'x'}, playback: {when: 'DURING'}}));
-  assert.equal(mixed.minRecorderVersion, compareVersions(RECORDER_VERSION, '3.11.26') >= 0 ? RECORDER_VERSION : '3.11.26');
+  assert.equal(mixed.minRecorderVersion, '3.11.27');
   assert.deepEqual(mixed.unknownFeatures, []);
 });
 

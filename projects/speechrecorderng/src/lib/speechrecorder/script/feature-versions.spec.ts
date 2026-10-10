@@ -34,11 +34,12 @@ describe('feature versions', () => {
 
   it('reports the floor the features imply', () => {
     expect(minRecorderVersionFor(scriptOf({}))).toBeNull();
-    expect(minRecorderVersionFor(scriptOf({prefill: {source: 'list'}}))).toBe('3.11.26');
-    expect(minRecorderVersionFor(scriptOf({playback: {when: 'DURING'}}))).toBe(VERSION);
+    expect(minRecorderVersionFor(scriptOf({prefill: {source: 'list'}}))).toBe('3.11.27');
+    expect(minRecorderVersionFor(scriptOf({playback: {when: 'DURING'}}))).toBe('3.11.27');
     expect(minRecorderVersionFor(scriptOf({prefill: {source: 'list'}, playback: {when: 'DURING'}})))
-      .toBe(compareVersions(VERSION, '3.11.26') >= 0 ? VERSION : '3.11.26');
-    expect(FEATURE_VERSIONS['playback']).toBe(VERSION);
+      .toBe('3.11.27');
+    // a floor names the release that introduced the feature, never the build that happens to run
+    expect(FEATURE_VERSIONS['playback']).toBe('3.11.27');
   });
 
   it('runs anything at or above its floor, and refuses what is newer', () => {

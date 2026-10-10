@@ -214,6 +214,6 @@ describe('ScriptApiService', () => {
     const withPrefill = {
       sections: [{groups: [{promptItems: [{prefill: {source: 'list'}}]}]}],
     };
-    expect(service.minRecorderVersion(withPrefill)).toBe('3.11.26');
+    expect(service.minRecorderVersion(withPrefill)).toBe('3.11.27');
   });
 });

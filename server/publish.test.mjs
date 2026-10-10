@@ -119,7 +119,7 @@ test('publish stamps the floor of the features the script uses', async () => {
     const prefillEtag = await putDraft(base, withPrefill.scriptId, script([prefillItem], 'Prefill'), withPrefill.etag);
     const published = await publish(base, withPrefill.scriptId, {fromDraftEtag: prefillEtag});
     assert.equal(published.status, 201);
-    assert.equal((await published.json()).minRecorderVersion, '3.11.26');
+    assert.equal((await published.json()).minRecorderVersion, '3.11.27');
 
     const withPlayback = await createScript(base, 'Playback');
     const playbackItem = {

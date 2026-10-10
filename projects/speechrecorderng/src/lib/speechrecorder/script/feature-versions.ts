@@ -12,10 +12,10 @@ import {VERSION} from '../../spr.module.version';
 import {PromptItem, Script, Section} from './script';
 
 export const FEATURE_VERSIONS: Readonly<Record<string, string>> = {
-  /** Prefill shipped in the 3.11.26 release. */
-  prefill: '3.11.26',
-  /** The playback modifier ships with this build, whatever version it reports. */
-  playback: VERSION,
+  /** Prefill landed after the 3.11.26 release, so 3.11.27 is the first to have it. */
+  prefill: '3.11.27',
+  /** The playback modifier landed after 3.11.26 too; a floor that followed the build would lock out recorders that have it. */
+  playback: '3.11.27',
 };
 
 /**

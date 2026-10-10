@@ -9,13 +9,13 @@
  * rather than shipping a script that a recorder would silently skip.
  */
 /** The recorder release this receiver serves; keep in step with the library's `VERSION`. */
-export const RECORDER_VERSION = '3.11.26';
+export const RECORDER_VERSION = '3.11.27';
 
 export const FEATURE_VERSIONS = {
-  /** Prefill shipped in the 3.11.26 receiver (`ba81bcf8`, `PromptItemPrefill`). */
-  prefill: '3.11.26',
-  /** The playback modifier ships with this receiver — whichever version it reports (L3). */
-  playback: RECORDER_VERSION,
+  /** Prefill landed after the 3.11.26 release (`ba81bcf8`, `PromptItemPrefill`), so 3.11.27 is the first to have it. */
+  prefill: '3.11.27',
+  /** The playback modifier landed after 3.11.26 too (`d4e63a4b`); a floor that followed the build would lock out recorders that have it. */
+  playback: '3.11.27',
 };
 
 /** Whether a recorder of `version` can run a script with this floor; an absent floor never blocks. */

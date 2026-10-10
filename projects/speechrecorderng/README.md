@@ -664,7 +664,7 @@ step).
 sound automatically and repeatably, one that leaves it to the play control (`autoplay: false`),
 one that is played once without a replay (`replay: false`) and one text item.
 
-#### The `playback` plan (since 3.11.26)
+#### The `playback` plan (since 3.11.27)
 
 The `autoplay`/`replay` flags above are the per media item mechanism. A prompt item can instead carry a `playback`
 plan, which takes over placement, repeats and the replay rule:

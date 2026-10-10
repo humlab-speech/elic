@@ -56,7 +56,7 @@ M0 decision; the materialised id is the plan's default.
 ### 1.1 Deployment version
 
 ```
-GET {api}version  ->  200 {"recorderVersion":"3.11.26"}
+GET {api}version  ->  200 {"recorderVersion":"3.11.27"}
 ```
 
 What the deployment serves, for the checks that compare against it: W10 ("the deployment runs
