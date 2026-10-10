@@ -1282,6 +1282,9 @@ export class SessionManager extends BasicRecorder implements AfterViewInit,OnDes
         }
         rf = new SprRecordingFile(sessId, ic, it.recs.length,null);
         rf.uuid=this.rfUuid;
+        // The take's own start, so a raw upload that is retried or restored later still says when it was recorded
+        rf._startedAsDateObj=new Date();
+        rf.startedDate=rf._startedAsDateObj.toJSON();
         //it.recs.push(rf);
         this.items.addSprRecFile(it,rf);
         this.items.currentRecordingFile=rf;
@@ -1770,6 +1773,19 @@ export class SessionManager extends BasicRecorder implements AfterViewInit,OnDes
           }
           let sessionsUrl = apiEndPoint + SessionService.SESSION_API_CTX;
           let recUrl: string = sessionsUrl + '/' + encodeURIComponent(rf.session ?? '') + '/' + RECFILE_API_CTX + '/' + encodeURIComponent(rf.itemCode);
+          // The body is the bare WAVE, so the take's identity travels in the query: no custom header, hence
+          // no CORS preflight to reject; a receiver that does not know the parameters ignores them.
+          const take = new URLSearchParams();
+          if (rf.startedDate) {
+            take.set('startedDate', rf.startedDate);
+          }
+          if (rf.uuid) {
+            take.set('uuid', rf.uuid);
+          }
+          const query = take.toString();
+          if (query !== '') {
+            recUrl += '?' + query;
+          }
           ww.writeAsync(ab, (wavFile) => {
             this.postRecording(wavFile, recUrl,rf);
             this.processingRecording = false

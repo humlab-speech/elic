@@ -17,7 +17,7 @@
  *   GET    {base}version                                             recorder version the deployment serves
  *   POST   {base}recordingfile/{id}                                   metadata
  *   PATCH  {base}recordingfile/{id}                                   edit selection
- *   POST   {base}session/{s}/recfile/{itemcode}                       upload a recording (v1, raw WAVE)
+ *   POST   {base}session/{s}/recfile/{itemcode}[?startedDate=&uuid=]  upload a recording (v1, raw WAVE; the query names the take)
  *   POST   {base}session/{s}/recfile/{uuid}                           upload a recording (v2, multipart)
  *   POST   {base}session/{s}/recfile/{uuid}/prepareChunksRequest       open a chunked upload
  *   POST   {base}session/{s}/recfile/{uuid}/{chunkIdx}                 upload one chunk
@@ -1022,7 +1022,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
       }
       if (segments.length === 1) {
         if (req.method === 'POST') {
-          return await uploadRecording(req, res, sessionId, {itemcode: segments[0]});
+          return await uploadRecording(req, res, url, sessionId, {itemcode: segments[0]});
         }
         if (req.method === 'GET') {
           return await sendRecordingAudio(req, res, url, resolveRecordingInSession(segments[0], sessionId));
@@ -1044,7 +1044,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
     }
 
     /** v1 upload: the body is the WAVE file itself. v2 upload: multipart with a `uuid` field. */
-    async function uploadRecording(req, res, sessionId, {itemcode}) {
+    async function uploadRecording(req, res, url, sessionId, {itemcode}) {
       requireFound(store.session(sessionId), `session ${sessionId}`);
       if (multipartBoundary(req.headers['content-type']) !== null) {
         const {fields, files} = await readMultipart(req, {tmpDir: store.tmpDir, maxBytes: maxBody});
@@ -1058,7 +1058,7 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
             sessionId,
             uuid,
             itemcode: fields.itemcode ?? null,
-            startedDate: fields.startedDate ?? null,
+            startedDate: plausibleDate(fields.startedDate ?? null),
             wavPath: audio.path,
             note: `upload uuid=${uuid ?? '-'}`,
           });
@@ -1066,14 +1066,23 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
           await removeAll(files);
         }
       }
+      // The raw body is the WAVE alone; the recorder names the take in the query (startedDate, uuid).
+      const takeUuid = url.searchParams.get('uuid');
+      const known = takeUuid === null || takeUuid === '' ? null : store.recordingFilesOfSession(sessionId).find((meta) => meta.uuid === takeUuid);
+      if (known !== null && known !== undefined) {
+        // The same take again (a retry after a crash lost the idempotency answer): answer, do not store twice.
+        log(`upload uuid=${takeUuid} repeated: recordingfile ${known.recordingFileId} already stored`);
+        return await sendJson(res, 200, {stored: true, recordingFileId: known.recordingFileId, session: known.session, version: known.version,
+          itemcode: known.itemcode ?? null, uuid: known.uuid, frames: known.frames, samplerate: known.samplerate, channels: known.channels, replayed: true});
+      }
       const wavPath = tmpFile('upload');
       await streamToFile(req, wavPath, {maxBytes: maxBody});
       try {
         return await storeRecording(req, res, {
           sessionId,
-          uuid: null,
+          uuid: takeUuid === '' ? null : takeUuid,
           itemcode,
-          startedDate: null,
+          startedDate: plausibleDate(url.searchParams.get('startedDate')),
           wavPath,
           note: `upload item=${itemcode}`,
         });
@@ -1553,6 +1562,15 @@ function seedScript(name) {
     script.name = name;
   }
   return script;
+}
+
+/** An ISO date from the client as an ISO string, or null: unparsable and future dates are not a start time. */
+function plausibleDate(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const time = Date.parse(value);
+  return Number.isFinite(time) && time <= Date.now() + 60_000 ? new Date(time).toISOString() : null;
 }
 
 function wantsAudio(req) {

@@ -31,14 +31,22 @@ describe('Uploader', () => {
         httpMock = TestBed.inject(HttpTestingController);
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        // queue writes of this spec must be on disk before the next spec clears and counts the store
+        await settle();
         httpMock.verify();
     });
+
+    const made: Array<Uploader> = [];
+    async function settle(): Promise<void> {
+        await Promise.all(made.splice(0).map((upl) => upl.persistenceIdle()));
+    }
 
     function uploader(cfg: UploadConfig = {}): Uploader {
         // persistence is the default; the specs that are not about it keep out of the shared IndexedDB
         const upl = new Uploader(http, false, {persistQueue: false, ...cfg});
         upl.DEBUG_DELAY = 0;
+        made.push(upl);
         return upl;
     }
 
@@ -332,7 +340,7 @@ describe('Uploader', () => {
         req1.error(networkError());
         expect(ul1.status).toBe(UploadStatus.FAILED);
         // wait for the persistence put to commit
-        await wait(50);
+        await settle();
         // simulate a reload: a fresh uploader restores the persisted upload
         const upl2 = uploader({persistQueue: true});
         let restored = -1;
@@ -345,7 +353,7 @@ describe('Uploader', () => {
         expect(req2.request.headers.get('Idempotency-Key')).toBe(key);
         req2.flush({});
         // wait for the persisted entry removal on success
-        await wait(50);
+        await settle();
         // a third uploader must not restore anything anymore
         const upl3 = uploader({persistQueue: true});
         let restored2 = -1;
@@ -373,7 +381,7 @@ describe('Uploader', () => {
         const upl = uploader({persistQueue: true});
         upl.queueUpload(new Upload(blob(10), '/api/fast'));
         httpMock.expectOne('/api/fast').flush({});
-        await wait(100);
+        await settle();
         expect(await restoreCount(uploader({persistQueue: true}))).toBe(0);
     });
 
@@ -382,7 +390,7 @@ describe('Uploader', () => {
         const upl = uploader({persistQueue: true});
         upl.queueUpload(new Upload(blob(10), '/api/refused'));
         httpMock.expectOne('/api/refused').flush('no', {status: 409, statusText: 'Conflict'});
-        await wait(100);
+        await settle();
         expect(await restoreCount(uploader({persistQueue: true}))).toBe(0);
     });
 
@@ -393,7 +401,7 @@ describe('Uploader', () => {
             upl1.queueUpload(new Upload(blob(10), '/api/' + name));
             httpMock.expectOne('/api/' + name).error(networkError());
         }
-        await wait(100);
+        await settle();
         const upl2 = uploader({persistQueue: true});
         expect(await restoreCount(upl2)).toBe(3);
         expect(await restoreCount(upl2)).toBe(0);
@@ -402,7 +410,7 @@ describe('Uploader', () => {
         first.flush({});
         httpMock.expectOne('/api/chunk0').flush({});
         httpMock.expectOne('/api/concat').flush({});
-        await wait(100);
+        await settle();
         expect(await restoreCount(uploader({persistQueue: true}))).toBe(0);
         await clearPersistedQueue();
     });
@@ -415,7 +423,7 @@ describe('Uploader', () => {
         form.append('chunkCount', '3');
         upl1.queueUpload(new Upload(form, '/api/concat'));
         httpMock.expectOne('/api/concat').error(networkError());
-        await wait(50);
+        await settle();
         const upl2 = uploader({persistQueue: true});
         await new Promise<void>((resolve) => {
             upl2.restorePersistedUploads().subscribe({complete: () => resolve()});
@@ -425,7 +433,7 @@ describe('Uploader', () => {
         expect(body.get('uuid')).toBe('u-1');
         expect(body.get('chunkCount')).toBe('3');
         req.flush({});
-        await wait(50);
+        await settle();
         await clearPersistedQueue();
     });
 

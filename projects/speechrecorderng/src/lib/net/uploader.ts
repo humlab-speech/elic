@@ -678,7 +678,7 @@ export class Uploader {
             data.forEach((value, name) => fields.push([name, value]));
         }
         const payload = data instanceof Blob ? {blob: data} : {form: fields};
-        const entry = {idempotencyKey: ul.idempotencyKey, url: ul.url, queuedAt: Date.now(), ...payload};
+        const entry = {idempotencyKey: ul.idempotencyKey, url: ul.url, queuedAt: this.nextQueueStamp(), ...payload};
         this.dbWrite('persist upload for later resume', (store) => store.put(entry));
     }
 
@@ -693,6 +693,20 @@ export class Uploader {
     // commit: a fast upload used to delete its entry before the put had run, leaving a stale entry
     // that was uploaded again on every later page load.
     private dbChain: Promise<void> = Promise.resolve();
+
+    private lastQueueStamp = 0;
+
+    // Microsecond-scaled and strictly increasing: uploads queued in the same millisecond (a chunk, then
+    // the concat behind it) must still restore in the order they were queued.
+    private nextQueueStamp(): number {
+        this.lastQueueStamp = Math.max(Date.now() * 1000, this.lastQueueStamp + 1);
+        return this.lastQueueStamp;
+    }
+
+    /** Resolves when every queue write requested so far has committed (or failed); for tests and orderly shutdown. */
+    persistenceIdle(): Promise<void> {
+        return this.dbChain;
+    }
 
     private dbWrite(what: string, op: (store: IDBObjectStore) => void): void {
         this.dbChain = this.dbChain.then(() => new Promise<void>((resolve) => {
