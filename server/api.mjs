@@ -57,6 +57,24 @@ const AUDIO_TYPES = {'.wav': 'audio/wav', '.webm': 'audio/webm', '.ogg': 'audio/
 const PENDING_WARN_MS = 60_000;
 
 export function createApiHandler({store, base, maxBody, log, autoCreateSession, concatWaitMs}) {
+  // Work on one recording UUID runs one at a time: a retried concat (same Idempotency-Key, or none) that
+  // arrives while the first is still joining chunks used to run in parallel and publish the take twice,
+  // because the key is only remembered once the work is done.
+  const chains = new Map();
+  async function serial(key, work) {
+    const previous = chains.get(key) ?? Promise.resolve();
+    const run = previous.catch(() => {}).then(work);
+    const tail = run.catch(() => {});
+    chains.set(key, tail);
+    try {
+      return await run;
+    } finally {
+      if (chains.get(key) === tail) {
+        chains.delete(key);
+      }
+    }
+  }
+
   const tmpFile = (kind) => join(store.tmpDir, `${kind}-${process.pid}-${randomBytes(6).toString('hex')}.wav`);
 
   function respondToError(req, res, err) {
@@ -1141,6 +1159,12 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
         if (uuid === null || uuid === undefined || uuid === '') {
           throw new RequestError(400, 'chunk upload without a recording UUID');
         }
+        const finalized = store.chunkSession(uuid)?.finalizedRecording;
+        if (finalized !== undefined && finalized !== null) {
+          // The take is published; a retried or restored chunk must not bring its files back.
+          log(`chunk ${chunkIdx} of ${uuid} ignored: recordingfile ${finalized.recordingFileId} was already published`);
+          return await sendJson(res, 200, {stored: true, uuid, chunkIdx: Number(chunkIdx), chunkCount: finalized.chunks, replayed: true});
+        }
         const replaced = store.chunkIndices(uuid).includes(Number(chunkIdx));
         store.upsertChunkSession(uuid, {
           sessionId,
@@ -1149,8 +1173,10 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
         store.addChunk(uuid, chunkIdx, wavPath);
         const chunkBytes = statSync(store.chunkPath(uuid, chunkIdx)).size;
         // A deferred concat is completed by this upload: the chunk the client queued behind it.
-        await completeDeferredConcat(sessionId, uuid).catch((err) => {
+        await serial(`chunks:${uuid}`, () => completeDeferredConcat(sessionId, uuid)).catch((err) => {
           log(`could not publish the deferred concat of ${uuid}: ${err.message}`);
+          // Left on the chunk session so the operator sees the take is stuck, not just a log line.
+          store.upsertChunkSession(uuid, {pendingConcat: {...(store.chunkSession(uuid)?.pendingConcat ?? {}), error: err.message}});
           return null;
         });
         return await idempotent(req, res, `chunk ${chunkIdx} of ${uuid}`, async () => {
@@ -1174,11 +1200,21 @@ export function createApiHandler({store, base, maxBody, log, autoCreateSession, 
     async function concatChunkedUpload(req, res, sessionId, segments) {
       requireFound(store.session(sessionId), `session ${sessionId}`);
       const {fields, files} = await readFields(req);
+      const uuidOf = fields.uuid ?? segments[segments.length - 1];
+      return await serial(`chunks:${uuidOf}`, () => concatChunkedUploadOnce(req, res, sessionId, segments, fields, files));
+    }
+
+    async function concatChunkedUploadOnce(req, res, sessionId, segments, fields, files) {
       const tmpPath = tmpFile('concat');
       try {
         const uuid = fields.uuid ?? segments[segments.length - 1];
         const itemcode = segments.length > 1 ? segments[segments.length - 2] : fields.itemcode ?? null;
         const announced = Number(fields.chunkCount ?? NaN);
+        if (!Number.isInteger(announced) || announced < 1) {
+          // Without the count the receiver cannot tell a finished take from one still arriving, and
+          // would publish whatever has been stored so far as the whole recording.
+          throw new RequestError(400, 'concatChunksRequest needs chunkCount (the number of chunks, at least 1)', {code: 'CHUNK_COUNT_REQUIRED'});
+        }
         const done = store.chunkSession(uuid)?.finalizedRecording;
         if (done !== undefined && done !== null) {
           log(`concatChunksRequest for ${uuid} repeated: recordingfile ${done.recordingFileId} was already published`);
