@@ -312,6 +312,26 @@ describe('ScriptDraftService', () => {
     expect(service.dirty()).toBe(false);
   }));
 
+  it('does not apply a backup made against a draft the server has since replaced', fakeAsync(() => {
+    const {service, http} = setup();
+    loadDraft(service, http, DRAFT, '"A"');
+    service.setValue('name', ['name'], 'stale-edit');
+    const backupKey = Object.keys(localStorage).find((key) => key.startsWith('spr-script-draft'))!;
+
+    // Another editor saved meanwhile: the server draft is now "B".
+    loadDraft(service, http, DRAFT, '"B"');
+    expect(service.dirty()).toBe(false);
+    expect(service.sourceText()).not.toContain('stale-edit');
+    expect(localStorage.getItem(backupKey)).toBeNull();
+    expect(localStorage.getItem(`${backupKey}:stale`)).toContain('stale-edit');
+    localStorage.removeItem(`${backupKey}:stale`);
+    // The first edit's debounced autosave was still pending when the draft was replaced.
+    tick(60_000);
+    for (const pending of http.match((request) => request.method === 'PUT')) {
+      expect(pending.request.body as string).not.toContain('stale-edit');
+    }
+  }));
+
   it('disables writes in FILES mode but still shows the draft as locally modified', fakeAsync(() => {
     const {service, http} = setup({apiEndPoint: 'test', apiType: ApiType.FILES, apiVersion: 1});
     expect(service.writesDisabled()).toBe(true);

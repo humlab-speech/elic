@@ -741,8 +741,28 @@ export class ScriptDraftService {
 
   private restoreBackup(): void {
     const record = this.readBackup();
-    if (record !== null) {
-      this.setText(record.text);
+    if (record === null) {
+      return;
+    }
+    // The backup is an edit of the draft with the validator it records. If the server draft has
+    // moved on since (another editor saved), applying it would autosave over that work with the
+    // fresh ETag and no 412; keep it aside instead.
+    if (record.etag !== undefined && record.etag !== this.etagSignal()) {
+      this.setAsideBackup();
+      return;
+    }
+    this.setText(record.text);
+  }
+
+  private setAsideBackup(): void {
+    try {
+      const raw = this.storage?.getItem(this.backupKey());
+      if (raw !== null && raw !== undefined) {
+        this.storage?.setItem(`${this.backupKey()}:stale`, raw);
+      }
+      this.storage?.removeItem(this.backupKey());
+    } catch {
+      // Ignore.
     }
   }
 
@@ -750,7 +770,7 @@ export class ScriptDraftService {
     return `${BACKUP_PREFIX}:${this.projectId}:${this.scriptId}`;
   }
 
-  private readBackup(): {text: string} | null {
+  private readBackup(): {text: string; etag?: string | null} | null {
     if (this.storage === null) {
       return null;
     }
@@ -759,8 +779,11 @@ export class ScriptDraftService {
       if (raw === null) {
         return null;
       }
-      const value = JSON.parse(raw) as {text?: unknown};
-      return typeof value?.text === 'string' ? {text: value.text} : null;
+      const value = JSON.parse(raw) as {text?: unknown; etag?: unknown};
+      if (typeof value?.text !== 'string') {
+        return null;
+      }
+      return typeof value.etag === 'string' || value.etag === null ? {text: value.text, etag: value.etag} : {text: value.text};
     } catch {
       return null;
     }
@@ -771,7 +794,7 @@ export class ScriptDraftService {
       return;
     }
     try {
-      this.storage.setItem(this.backupKey(), JSON.stringify({text: this.sourceTextSignal()}));
+      this.storage.setItem(this.backupKey(), JSON.stringify({text: this.sourceTextSignal(), etag: this.etagSignal()}));
     } catch {
       // A full or disabled storage must not break editing.
     }

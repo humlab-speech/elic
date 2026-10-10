@@ -68,7 +68,8 @@ export function exampleDraw(
   offset = 0,
 ): ExampleDrawItem[] {
   const matching = queryBank(bank, source.filter ?? {}).items;
-  const ordered = source.order === 'RANDOM'
+  // The receiver shuffles unless the rule says SEQUENTIAL, so an unset order is random here too.
+  const ordered = source.order !== 'SEQUENTIAL'
     ? shuffled(matching, mulberry32(hashSeed(`${bank?.bankId ?? ''}:${source.itemcodePrefix ?? ''}:${offset}`)))
     : matching;
   const wanted = Math.max(0, Math.min(Number(source.count) || 0, matching.length, 4));
