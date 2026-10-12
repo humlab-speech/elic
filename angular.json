@@ -191,6 +191,11 @@
                 "glob": "*.checks.json",
                 "input": "doc/script-editor/checks",
                 "output": "checks"
+              },
+              {
+                "glob": "*.draw.json",
+                "input": "doc/script-editor/draws",
+                "output": "draws"
               }
             ]
           }

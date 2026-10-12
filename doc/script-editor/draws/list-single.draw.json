@@ -1,0 +1,196 @@
+{
+  "note": "One list source: the drawn list becomes one item per entry; the template keeps the placeholder's other fields.",
+  "lists": {
+    "words": {
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "apa",
+            "bil"
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "cykel",
+            "dag",
+            "elg"
+          ]
+        },
+        {
+          "id": "3",
+          "entries": [
+            "fisk",
+            "get"
+          ]
+        },
+        {
+          "id": "4",
+          "entries": [
+            "hus",
+            "is"
+          ]
+        }
+      ]
+    },
+    "sentences": {
+      "lists": [
+        {
+          "id": "1",
+          "entries": [
+            "Hon sover."
+          ]
+        },
+        {
+          "id": "2",
+          "entries": [
+            "Han springer.",
+            "Vi äter."
+          ]
+        },
+        {
+          "id": "3",
+          "entries": [
+            "Det regnar."
+          ]
+        },
+        {
+          "id": "4",
+          "entries": [
+            "Solen skiner.",
+            "Det blåser."
+          ]
+        }
+      ]
+    }
+  },
+  "script": {
+    "name": "Draw",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "1",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "fixed 1"
+                  }
+                ]
+              },
+              {
+                "itemcode": "6",
+                "recduration": 9000,
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "Read"
+                  }
+                ],
+                "prefill": {
+                  "source": "words",
+                  "itemcodeFormat": "6.{n}",
+                  "recinstructions": "Read it",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "{entry}"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "sessionId": "s1"
+  },
+  "expect": {
+    "script": {
+      "name": "Draw",
+      "sections": [
+        {
+          "mode": "MANUAL",
+          "promptphase": "IDLE",
+          "order": "SEQUENTIAL",
+          "training": false,
+          "groups": [
+            {
+              "order": "SEQUENTIAL",
+              "promptItems": [
+                {
+                  "itemcode": "1",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "fixed 1"
+                    }
+                  ]
+                },
+                {
+                  "recduration": 9000,
+                  "itemcode": "6.1",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "apa"
+                    }
+                  ],
+                  "recinstructions": {
+                    "recinstructions": "Read it"
+                  }
+                },
+                {
+                  "recduration": 9000,
+                  "itemcode": "6.2",
+                  "mediaitems": [
+                    {
+                      "mimetype": "text/plain",
+                      "text": "bil"
+                    }
+                  ],
+                  "recinstructions": {
+                    "recinstructions": "Read it"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "bankDraws": [],
+    "listDraws": [
+      {
+        "kind": "list",
+        "placeholderItemcode": "6",
+        "source": "words",
+        "list": "1",
+        "link": null,
+        "linked": false,
+        "key": "session:s1",
+        "items": [
+          {
+            "itemcode": "6.1",
+            "entry": "apa"
+          },
+          {
+            "itemcode": "6.2",
+            "entry": "bil"
+          }
+        ]
+      }
+    ]
+  }
+}

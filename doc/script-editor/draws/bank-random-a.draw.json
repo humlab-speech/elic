@@ -1,0 +1,188 @@
+{
+  "note": "An unset order shuffles; this is session s1.",
+  "banks": {
+    "mixed": {
+      "bankId": "mixed",
+      "title": "Mixed",
+      "source": "PROJECT",
+      "items": [
+        {
+          "bankItemId": "b1",
+          "text": "Hon målade köket.",
+          "category": "sentence",
+          "words": 3,
+          "audioSrc": "media/b1.wav"
+        },
+        {
+          "bankItemId": "b2",
+          "text": "Han satte sig på bänken.",
+          "category": "sentence",
+          "words": 5,
+          "audioSrc": "media/b2.wav",
+          "audioMimetype": "audio/wav"
+        },
+        {
+          "bankItemId": "b3",
+          "text": "Vi åker tåg.",
+          "category": "sentence",
+          "words": 3
+        },
+        {
+          "bankItemId": "b4",
+          "text": "a",
+          "category": "vowel",
+          "words": 1,
+          "audioSrc": "media/b4.wav"
+        },
+        {
+          "bankItemId": "b5",
+          "text": "i",
+          "category": "vowel",
+          "words": 1
+        },
+        {
+          "bankItemId": "b6",
+          "promptDoc": {
+            "body": {
+              "blocks": [
+                {
+                  "type": "p",
+                  "texts": [
+                    {
+                      "type": "text",
+                      "text": "Ett svårt fall"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "category": "passage",
+          "words": 3,
+          "mimetype": "text/x-prompt"
+        },
+        {
+          "bankItemId": "b7",
+          "src": "images/hus.png",
+          "mimetype": "image/png",
+          "alt": "Ett hus",
+          "category": "picture"
+        }
+      ]
+    }
+  },
+  "script": {
+    "name": "Draw",
+    "sections": [
+      {
+        "mode": "MANUAL",
+        "promptphase": "IDLE",
+        "order": "SEQUENTIAL",
+        "training": false,
+        "groups": [
+          {
+            "order": "SEQUENTIAL",
+            "promptItems": [
+              {
+                "itemcode": "RB",
+                "mediaitems": [
+                  {
+                    "mimetype": "text/plain",
+                    "text": "placeholder"
+                  }
+                ],
+                "prefill": {
+                  "bank": {
+                    "bank": "mixed",
+                    "bankSource": "PROJECT",
+                    "count": 3,
+                    "itemcodePrefix": "RB"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "sessionId": "s1"
+  },
+  "expect": {
+    "script": {
+      "name": "Draw",
+      "sections": [
+        {
+          "mode": "MANUAL",
+          "promptphase": "IDLE",
+          "order": "SEQUENTIAL",
+          "training": false,
+          "groups": [
+            {
+              "order": "SEQUENTIAL",
+              "promptItems": [
+                {
+                  "itemcode": "RB001",
+                  "mediaitems": [
+                    {
+                      "text": "a",
+                      "mimetype": "text/plain"
+                    }
+                  ],
+                  "bankItemId": "b4"
+                },
+                {
+                  "itemcode": "RB002",
+                  "mediaitems": [
+                    {
+                      "text": "Hon målade köket.",
+                      "mimetype": "text/plain"
+                    }
+                  ],
+                  "bankItemId": "b1"
+                },
+                {
+                  "itemcode": "RB003",
+                  "mediaitems": [
+                    {
+                      "text": "Vi åker tåg.",
+                      "mimetype": "text/plain"
+                    }
+                  ],
+                  "bankItemId": "b3"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "bankDraws": [
+      {
+        "kind": "bank",
+        "placeholderItemcode": "RB",
+        "bank": "mixed",
+        "key": "session:s1",
+        "items": [
+          {
+            "itemcode": "RB001",
+            "bankItemId": "b4"
+          },
+          {
+            "itemcode": "RB002",
+            "bankItemId": "b1"
+          },
+          {
+            "itemcode": "RB003",
+            "bankItemId": "b3"
+          }
+        ],
+        "refilled": false,
+        "skippedRecorded": false,
+        "speakerFallback": false
+      }
+    ],
+    "listDraws": []
+  }
+}
