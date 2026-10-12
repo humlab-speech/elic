@@ -1,4 +1,5 @@
 import {HttpErrorResponse} from '@angular/common/http';
+import {catchError, forkJoin, map, of, type Subscription} from 'rxjs';
 import {Component, computed, effect, inject, input, signal} from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {ActivatedRoute, Router} from '@angular/router';
@@ -13,12 +14,17 @@ import {
   type PromptItem,
 } from 'speechrecorderng';
 import {PREVIEW_STRINGS} from './preview-strings';
+import {BankApiService} from '../core/bank-api.service';
+import {ListApiService} from '../core/list-api.service';
 import {loadScript} from '../core/load';
 import {MediaService} from '../core/media.service';
 import {ScriptApiService} from '../core/script-api.service';
 import type {EditorScript} from '../core/script.model';
 import {DEFAULT_PROJECT} from '../editor.config';
-import {buildOrderRows, selectableRows, type OrderRow} from './preview-order';
+import {buildOrderRows, selectableRows, type OrderRow, type PreviewDrawInputs} from './preview-order';
+import {eachBankSource, eachListSource} from '../core/validation/walk';
+import type {ListDoc} from '../core/draw-engine';
+import type {BankView} from '../core/validation/types';
 import {PreviewOrderPanel} from './preview-order-panel';
 import {PreviewPlaybackPanel, type Lamps} from './preview-playback-panel';
 import {stageParts, type MediaIndex, type StagePart} from './preview-stage';
@@ -73,6 +79,9 @@ export class ScriptPreview {
   private readonly media = inject(MediaService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  // Optional on purpose: tier 1 works without a receiver. Without them the drawn groups show mock entries.
+  private readonly banks = inject(BankApiService, {optional: true});
+  private readonly lists = inject(ListApiService, {optional: true});
 
   readonly strings = PREVIEW_STRINGS;
 
@@ -86,13 +95,15 @@ export class ScriptPreview {
   /** Declared playback files of the project; null while unknown, so nothing is called missing. */
   readonly mediaIndex = signal<MediaIndex | null>(null);
   readonly generation = signal(0);
+  /** The banks and lists the script draws from, once read; null until then and when no receiver is there. */
+  readonly drawInputs = signal<PreviewDrawInputs | null>(null);
 
   private readonly urlItem = signal<string | null>(null);
   private readonly urlStep = signal<SimStep | null>(null);
   /** Replays used per row key; the counter resets when the selection moves. */
   private readonly replays = signal<{key: string; used: number}>({key: '', used: 0});
 
-  readonly rows = computed(() => buildOrderRows(this.script(), this.generation()));
+  readonly rows = computed(() => buildOrderRows(this.script(), this.generation(), this.drawInputs() ?? undefined));
   readonly selectable = computed(() => selectableRows(this.rows()));
   readonly currentRow = computed<OrderRow | null>(() => {
     const rows = this.selectable();
@@ -187,11 +198,15 @@ export class ScriptPreview {
       }
       this.state.set('loading');
       this.error.set(null);
+      this.drawInputs.set(null);
+      let drawSubscription: Subscription | null = null;
       const scriptSubscription = this.api.getScript(id).subscribe({
         next: (script) => {
           const loaded = loadScript(script as EditorScript);
           this.script.set(loaded);
           this.state.set(selectableRows(buildOrderRows(loaded, 0)).length === 0 ? 'empty' : 'ready');
+          drawSubscription?.unsubscribe();
+          drawSubscription = this.loadDrawInputs(project, loaded);
         },
         error: (error: unknown) => {
           this.error.set(describeError(error));
@@ -206,6 +221,40 @@ export class ScriptPreview {
       onCleanup(() => {
         scriptSubscription.unsubscribe();
         mediaSubscription.unsubscribe();
+        drawSubscription?.unsubscribe();
+      });
+    });
+  }
+
+  /**
+   * Reads the banks and list sources the script draws from, so the example is built from their real items
+   * and entries. A 404 means the bank or list is not there (its drawn group shows none); any other failure
+   * means unknown (the group falls back to mock entries).
+   */
+  private loadDrawInputs(project: string, script: EditorScript): Subscription {
+    const bankIds = this.banks === null ? [] : [...new Set(eachBankSource(script).map((ref) => ref.bankId).filter((id) => id !== ''))];
+    const listIds = this.lists === null ? [] : [...new Set(eachListSource(script).map((ref) => ref.source).filter((id): id is string => typeof id === 'string' && id !== ''))];
+    if (bankIds.length === 0 && listIds.length === 0) {
+      return of(null).subscribe();
+    }
+    const answer = (error: unknown) => of(error instanceof HttpErrorResponse && error.status === 404 ? null : undefined);
+    return forkJoin({
+      banks: forkJoin(bankIds.map((id) => this.banks!.items(project, id, {limit: 1000}).pipe(
+        map((page): BankView | null | undefined => ({bankId: id, items: page.items})),
+        catchError(answer),
+        map((view) => [id, view] as const),
+      ))),
+      lists: forkJoin(listIds.map((id) => this.lists!.get(project, id).pipe(
+        map((doc): ListDoc | null | undefined => doc),
+        catchError(answer),
+        map((doc) => [id, doc] as const),
+      ))),
+    }).subscribe(({banks, lists}) => {
+      const bankViews = new Map(banks);
+      const listDocs = new Map(lists);
+      this.drawInputs.set({
+        bank: (id) => (bankViews.has(id) ? bankViews.get(id) : undefined),
+        list: (id) => (listDocs.has(id) ? listDocs.get(id) : undefined),
       });
     });
   }

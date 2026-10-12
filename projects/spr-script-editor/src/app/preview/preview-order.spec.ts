@@ -130,3 +130,66 @@ describe('preview session order', () => {
     expect(buildOrderRows({scriptId: 'empty', sections: []}, 0)).toEqual([]);
   });
 });
+
+describe('buildOrderRows with the banks and lists read from the receiver', () => {
+  const BANK = {
+    bankId: 'std-passages',
+    items: [
+      {bankItemId: 'v1', text: 'a', category: 'vowel', audioSrc: 'media/a.wav'},
+      {bankItemId: 'v2', text: 'e', category: 'vowel', audioSrc: 'media/e.wav'},
+      {bankItemId: 's1', text: 'A sentence.', category: 'sentence'},
+    ],
+  };
+  const LISTED: PromptItem = {
+    itemcode: '6',
+    mediaitems: [{mimetype: 'text/plain', text: 'Read'}],
+    prefill: {source: 'words', itemcodeFormat: '6.{n}', mediaitems: [{mimetype: 'text/plain', text: '{entry}'}]},
+  };
+  const scriptWith = (...items: PromptItem[]): EditorScript => ({
+    scriptId: 'demo',
+    name: 'Demo',
+    sections: [{mode: 'MANUAL', promptphase: 'IDLE', training: false, groups: [{order: 'SEQUENTIAL', promptItems: items}]}],
+  } as EditorScript);
+  const inputs = {
+    bank: (id: string) => (id === 'std-passages' ? BANK : null),
+    list: (id: string) => (id === 'words' ? {lists: [{id: '1', entries: ['apa', 'bil']}]} : null),
+  };
+
+  it('draws the bank\'s own items (filtered, with their bank audio), not the mock entries', () => {
+    const rows = buildOrderRows(scriptWith(PLACEHOLDER), 0, inputs);
+    const drawn = rows.filter((row) => row.kind === 'drawn');
+    expect(drawn.map((row) => row.label)).toEqual(['D001', 'D002']);
+    expect(drawn.map((row) => row.entry).sort()).toEqual(['a', 'e']);
+    expect(drawn[0].item?.mediaitems.some((mediaitem) => mediaitem.src?.startsWith('media/'))).toBeTrue();
+    expect(drawn[0].item?.playback).toEqual(DRAW_BANK.playback as never);
+    expect((drawn[0].item as unknown as {bankItemId: string}).bankItemId).toMatch(/^v[12]$/);
+  });
+
+  it('is the same example for the same generation and another one after Re-draw', () => {
+    const entries = (generation: number) => buildOrderRows(scriptWith(PLACEHOLDER), generation, inputs)
+      .filter((row) => row.kind === 'drawn').map((row) => row.entry);
+    expect(entries(0)).toEqual(entries(0));
+    expect(Array.from({length: 8}, (_, generation) => entries(generation).join()).some((joined) => joined !== entries(0).join())).toBeTrue();
+  });
+
+  it('expands a list source into its entries under a drawn-list row', () => {
+    const rows = buildOrderRows(scriptWith(LISTED), 0, inputs);
+    expect(rows.filter((row) => row.kind === 'drawn-group').map((row) => row.label)).toEqual(['Drawn list: words']);
+    expect(rows.filter((row) => row.kind === 'drawn').map((row) => [row.label, row.entry])).toEqual([['6.1', 'apa'], ['6.2', 'bil']]);
+    expect(rows.filter((row) => row.kind === 'item')).toEqual([]);
+  });
+
+  it('falls back to mock entries for a bank that could not be read, and shows none for one that does not exist', () => {
+    const unreadable = buildOrderRows(scriptWith(PLACEHOLDER), 0, {bank: () => undefined, list: () => undefined});
+    expect(unreadable.filter((row) => row.kind === 'drawn').length).toBe(2);
+    const gone = buildOrderRows(scriptWith(PLACEHOLDER), 0, {bank: () => null, list: () => null});
+    expect(gone.filter((row) => row.kind === 'drawn')).toEqual([]);
+    expect(gone.filter((row) => row.kind === 'drawn-group').length).toBe(1);
+  });
+
+  it('shows a list placeholder as a plain item when its list is not available', () => {
+    const rows = buildOrderRows(scriptWith(LISTED), 0, {bank: () => undefined, list: () => undefined});
+    expect(rows.filter((row) => row.kind === 'item').map((row) => row.label)).toEqual(['6']);
+  });
+});
+

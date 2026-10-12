@@ -15,6 +15,7 @@ import type {PrefillBankSource, PromptItem} from 'speechrecorderng';
 import {PREVIEW_STRINGS} from './preview-strings';
 import type {EditorScript, EditorSection} from '../core/script.model';
 import {exampleDraw, isDrawnPlaceholder} from './preview-draw';
+import {resolveDraws, type DrawContext} from '../core/draw-engine';
 import {promptTextOf} from './preview-stage';
 
 export type OrderRowKind = 'section' | 'group' | 'drawn-group' | 'item' | 'drawn';
@@ -70,10 +71,34 @@ function itemRow(
   };
 }
 
-/** The order rows of a script, with the example draw of `generation` folded into each drawn group. */
-export function buildOrderRows(script: EditorScript | null | undefined, generation: number): OrderRow[] {
+/** What the preview knows of the banks and list sources the script draws from. */
+export type PreviewDrawInputs = Pick<DrawContext, 'bank' | 'list'>;
+
+/**
+ * The order rows of a script, with the example draw of `generation` folded into each drawn group.
+ *
+ * With `inputs` the draw is the receiver's own (`core/draw-engine.ts`, held to it by shared fixtures): the
+ * bank's real items and the list's real entries, drawn for the session id `preview:<script>:<generation>`.
+ * A bank that could not be read falls back to the mock entries; without `inputs` everything is mock.
+ */
+export function buildOrderRows(
+  script: EditorScript | null | undefined,
+  generation: number,
+  inputs?: PreviewDrawInputs,
+): OrderRow[] {
   const strings = PREVIEW_STRINGS;
   const rows: OrderRow[] = [];
+  const drawn = inputs === undefined || !script
+    ? null
+    : resolveDraws(script, {sessionId: `preview:${script.scriptId ?? ''}:${generation}`, scriptId: script.scriptId, ...inputs});
+  const generated = new Map<string, PromptItem>();
+  for (const section of drawn?.script.sections ?? []) {
+    for (const group of section?.groups ?? []) {
+      for (const made of group?.promptItems ?? []) {
+        generated.set(String(made.itemcode), made as PromptItem);
+      }
+    }
+  }
   (script?.sections ?? []).forEach((section, sectionIndex) => {
     rows.push({
       key: `s${sectionIndex}`,
@@ -120,6 +145,42 @@ export function buildOrderRows(script: EditorScript | null | undefined, generati
 
       items.forEach((item, itemIndex) => {
         const key = `s${sectionIndex}g${groupIndex}i${itemIndex}`;
+        const listDraw = drawn?.listDraws.find((draw) => draw.placeholderItemcode === item.itemcode);
+        if (listDraw !== undefined) {
+          rows.push({
+            key: `${key}-rule`,
+            kind: 'drawn-group',
+            depth: 2,
+            label: `${strings.drawnListLabel}: ${listDraw.source}`,
+            detail: `${strings.listWord} ${listDraw.list} · ${listDraw.items.length} ${strings.itemsWord}`,
+            item: null,
+            bank: null,
+            entry: null,
+            drawn: true,
+            section,
+            sectionIndex,
+            groupIndex,
+            itemIndex,
+          });
+          listDraw.items.forEach((made, exampleIndex) => {
+            rows.push({
+              key: `${key}-d${exampleIndex}`,
+              kind: 'drawn',
+              depth: 3,
+              label: made.itemcode,
+              detail: made.entry,
+              item: generated.get(made.itemcode) ?? null,
+              bank: null,
+              entry: made.entry,
+              drawn: true,
+              section,
+              sectionIndex,
+              groupIndex,
+              itemIndex,
+            });
+          });
+          return;
+        }
         if (!isDrawnPlaceholder(item) || !item.prefill?.bank) {
           rows.push(itemRow(item, key, 2, section, sectionIndex, groupIndex, itemIndex));
           return;
@@ -141,15 +202,15 @@ export function buildOrderRows(script: EditorScript | null | undefined, generati
           groupIndex,
           itemIndex,
         });
-        exampleDraw(
-          bank,
-          script?.scriptId,
-          sectionIndex,
-          groupIndex,
-          itemIndex,
-          generation,
-          item.mediaitems ?? [],
-        ).forEach((example, exampleIndex) => {
+        const bankDraw = drawn?.bankDraws.find((draw) => draw.placeholderItemcode === item.itemcode);
+        const missing = drawn?.unresolved.some((entry) => entry.itemcode === item.itemcode && entry.reason === 'missing') === true;
+        const examples = bankDraw !== undefined
+          ? bankDraw.items.map((made) => {
+            const madeItem = generated.get(made.itemcode) as PromptItem;
+            return {itemcode: made.itemcode, entry: promptTextOf(madeItem) || made.bankItemId, item: madeItem};
+          })
+          : (missing ? [] : exampleDraw(bank, script?.scriptId, sectionIndex, groupIndex, itemIndex, generation, item.mediaitems ?? []));
+        examples.forEach((example, exampleIndex) => {
           rows.push({
             key: `${key}-d${exampleIndex}`,
             kind: 'drawn',

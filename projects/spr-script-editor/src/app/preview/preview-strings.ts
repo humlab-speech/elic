@@ -24,6 +24,8 @@ export const PREVIEW_STRINGS = {
   groupOne: 'Group',
   itemOne: 'Item',
   drawnGroupLabel: 'Drawn group',
+  drawnListLabel: 'Drawn list',
+  listWord: 'list',
   fromWord: 'from',
   itemsWord: 'items',
   drawnWord: 'drawn',

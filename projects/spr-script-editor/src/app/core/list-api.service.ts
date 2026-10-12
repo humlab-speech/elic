@@ -3,6 +3,7 @@ import {Inject, Injectable} from '@angular/core';
 import {SPEECHRECORDER_CONFIG, SpeechRecorderConfig} from 'speechrecorderng';
 import {Observable} from 'rxjs';
 import {normaliseApiEndPoint, projectPath, withQuery} from './api-base';
+import type {ListDoc} from './draw-engine';
 import type {ListView} from './validation/types';
 
 /** One row of the list-source library (rest-api.md §3.5). */
@@ -35,6 +36,12 @@ export class ListApiService {
   /** `GET project/{p}/list`. */
   list(projectId: string): Observable<ListSummary[]> {
     return this.http.get<ListSummary[]>(withQuery(projectPath(this.base, projectId, 'list'), this.config),
+      {withCredentials: this.withCredentials});
+  }
+
+  /** `GET project/{p}/list/{id}` — the lists with their entries, for the preview's example draw. */
+  get(projectId: string, listId: string): Observable<ListDoc> {
+    return this.http.get<ListDoc>(withQuery(projectPath(this.base, projectId, 'list', listId), this.config),
       {withCredentials: this.withCredentials});
   }
 }

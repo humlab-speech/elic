@@ -153,7 +153,13 @@ drift from the recorder (README §5).
 
 ## 4. Preview, tier 1
 
-*Artboard: Preview.* An editor-side mock, instant, no server.
+*Artboard: Preview.* An editor-side mock of the *screen*, instant, nothing recorded. Its drawn groups are not mock
+content: the preview reads the project's banks and list sources and draws from them with the receiver's own rules
+(`core/draw-engine.ts`, held to `server/draw.mjs` by the shared fixtures in `doc/script-editor/draws/`), for the made-up
+session id `preview:<script>:<generation>` — so it shows real items, real entries, the receiver's default order and
+the fields the receiver generates, and "Draw another example" walks to the next made-up session. It is still an
+example: a real session draws for its own id. A bank or list the preview cannot read falls back to placeholder
+entries (a bank) or the plain placeholder item (a list); one that does not exist shows no examples.
 
 - **Speaker frame** at the viewport's own width — two breakpoints (1100 px, 700 px), no desktop/tablet/phone
   control: section name, Practice and "Drawn item"
