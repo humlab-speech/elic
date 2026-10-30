@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Cavox",
-    "shortTitle": "Cavox",
+    "title": "Elic — Insamling av tal och röst",
+    "shortTitle": "Elic",
     "menu": "Meny",
     "menuHelp": "Hjälp",
     "language": "Språk",
@@ -25,10 +25,10 @@
       "action": "Åtgärd"
     },
     "start": {
-      "badge": "Umeå universitet · Cavox",
+      "badge": "Umeå universitet · Elic",
       "titleLine1": "Spela in tal,",
       "titleLine2": "mot manusbundna prompter.",
-      "lead": "Cavox genomför en inspelningssession i webbläsaren: det visar prompterna i det inlästa manuset, tar upp ljud från vald enhet och bevarar varje inspelning med dess metadata.",
+      "lead": "Elic genomför en inspelningssession i webbläsaren: det visar prompterna i det inlästa manuset, tar upp ljud från vald enhet och bevarar varje inspelning med dess metadata.",
       "openRecorder": "Öppna inspelaren"
     },
     "session": {
@@ -277,7 +277,7 @@
       "uploadPartial": "Vissa uppladdningar misslyckades. Inspelningarna sparades inte på servern."
     },
     "respondent": {
-      "windowTitle": "Cavox – respondentvy (session {{session}})",
+      "windowTitle": "Elic – respondentvy (session {{session}})",
       "waitingTitle": "Väntar på inspelaren",
       "waitingBody": "Det här fönstret visar promptscenen för den pågående sessionen. Det ansluter så snart inspelarfönstret skickar den.",
       "unsupportedTitle": "Respondentvyn stöds inte",

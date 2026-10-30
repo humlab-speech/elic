@@ -146,7 +146,7 @@ importing them would drag in `SpeechrecorderngModule` and break the rule above.
 
 ### 4.1 Project entry
 
-On current `master` the application project is named `Cavox` and the library stays
+On current `master` the application project is named `Elic` and the library stays
 `speechrecorderng`; the editor is a third project and nothing else in the workspace moves. Add to
 [angular.json](../../angular.json) under `projects`:
 
@@ -670,7 +670,7 @@ rule).
   ```bash
   npm run build
   node server/server.mjs --port 8391 --data /tmp/dryrun --seed src/test \
-    --app dist/cavox/browser --project Demo1 --script playback --quiet &
+    --app dist/elic/browser --project Demo1 --script playback --quiet &
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
     --remote-debugging-port=9333 --user-data-dir=/tmp/cdp-dry \
     --use-fake-ui-for-media-stream --use-fake-device-for-media-stream \

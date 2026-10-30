@@ -1517,7 +1517,7 @@ export class SessionManager extends BasicRecorder implements AfterViewInit,OnDes
         if (blob === null) {
           return 'none';
         }
-        SessionExportService.download(blob, `cavox_${this._session?.sessionId ?? 'session'}.zip`);
+        SessionExportService.download(blob, `elic_${this._session?.sessionId ?? 'session'}.zip`);
         return 'exported';
       }
     };

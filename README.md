@@ -1,4 +1,4 @@
-# Cavox
+# Elic
 
 Capture your voice — a speech recording tool implemented as an Angular 20 module.
 
@@ -216,7 +216,7 @@ Copy the dist folder to ```/wsr/ng/``` on your Web-Server and setup the fallback
    
 ### Server REST API
 
-Cavox requires a HTTP server providing a REST API. The server code is not part of this package.
+Elic requires a HTTP server providing a REST API. The server code is not part of this package.
 The package only contains a minimal file structure for testing. The files reside in `src/test`.
 
 Versions 2.x.x of the recorder (then WebSpeechRecorderNg) use the REST API version v1, Versions 3.x.x may use API version v1 and  v2. Set environment property apiVersion accordingly (default: `apiVersion: 1`) 
@@ -273,7 +273,7 @@ answers 504 — sessions, scripts and uploads all come from the API.
 | `--api-base <path>` | API base path (default `/api/v1`); must equal the application's `apiEndPoint` |
 | `--data <dir>` | data directory, seeded on first run (default `server/data`) |
 | `--seed <dir\|none>` | fixture tree copied into an empty data directory (default `src/test`) |
-| `--app <dir\|none>` | built application to serve (default `dist/cavox/browser`) |
+| `--app <dir\|none>` | built application to serve (default `dist/elic/browser`) |
 | `--project`, `--script` | project and script of sessions created on demand |
 | `--no-auto-create` | answer `404` for sessions that do not exist instead of creating them |
 | `--no-cors`, `--credentials` | cross-origin behaviour, for a development server on another port |
@@ -294,7 +294,7 @@ The application takes its settings from the environment files in `src/environmen
 
 * `environment.ts` — tracked defaults, used by `ng serve` and `ng build --configuration development`. It records against the evaluation receiver (`apiEndPoint: '/api/v1'`, proxied by `proxy.conf.json`) and uploads every recording; `environment.demo.sample.ts` is the variant that only reads the `src/test` fixtures.
 * `environment.prod.sample.ts` — the template for a deployment.
-* `environment.prod.ts` — deployment specific and **not tracked by git**. Production builds (`npm run build`/`ng build`, the default configuration) replace `environment.ts` with it, see the `fileReplacements` entry of `Cavox:build:production` in `angular.json`.
+* `environment.prod.ts` — deployment specific and **not tracked by git**. Production builds (`npm run build`/`ng build`, the default configuration) replace `environment.ts` with it, see the `fileReplacements` entry of `Elic:build:production` in `angular.json`.
 
 `npm run build` creates `environment.prod.ts` from the sample when it is missing, so a fresh checkout builds with the sample's defaults. For a real deployment copy the sample and edit the endpoint and options — the copy stays out of the repository, so deployment settings are never committed:
 
@@ -303,7 +303,7 @@ cp src/environments/environment.prod.sample.ts src/environments/environment.prod
 ```
 
 
-## Cavox REST API description
+## Elic REST API description
 
 The entities below are the model, with the path each one is read at. The **complete endpoint reference** — the draft,
 publish and version routes, banks and draws, media upload/list/delete and the preview session, with request and
@@ -583,7 +583,7 @@ audio*.
 
 ### Recording file
 
-Cavox stores the recording in browser memory first. The recordings are then uploaded to the server as binary encoded WAVE files.
+Elic stores the recording in browser memory first. The recordings are then uploaded to the server as binary encoded WAVE files.
 
 Path: POST {apiEndPoint}session/{sessionId}/recfile/{itemcode}
 
@@ -596,7 +596,7 @@ A GET request to the URL should return the latest upload.
 ### Start a recording session
 
 The default routing path to start a recording session is `/spr/session/{sessionId}`. If you call this router link from your Angular application
-Cavox should start and will try to load the session data from the REST API first.
+Elic should start and will try to load the session data from the REST API first.
  
 ## GUI components to view and edit your recording database
 
@@ -808,7 +808,7 @@ The app will automatically reload if you change any of the source files.
 
 ### Build
 
-Run `npm run build` to build the application (production, the default configuration). The build artifacts will be stored in the `dist/cavox` directory. Use `npm run watch` or `ng build --configuration development` for a development build.
+Run `npm run build` to build the application (production, the default configuration). The build artifacts will be stored in the `dist/elic` directory. Use `npm run watch` or `ng build --configuration development` for a development build.
 
 The production build reads `src/environments/environment.prod.ts`, which is deployment specific and not tracked: `npm run build` creates it from `environment.prod.sample.ts` when it is missing, see [Configuration](#configuration).
 

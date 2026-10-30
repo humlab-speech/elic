@@ -32,7 +32,7 @@ const PORT = Number(opt('port', '8080'));
 const API = opt('api', 'http://127.0.0.1:8391');
 const API_ORIGIN = new URL(API);
 const MOUNTS = [
-  {prefix: '/wsr/ng/', dir: resolve(opt('recorder', 'dist/cavox/browser')), title: 'Recorder'},
+  {prefix: '/wsr/ng/', dir: resolve(opt('recorder', 'dist/elic/browser')), title: 'Recorder'},
   {prefix: '/wsr/edit/', dir: resolve(opt('editor', 'dist/spr-script-editor/browser')), title: 'Script editor'},
 ];
 const TYPES = {

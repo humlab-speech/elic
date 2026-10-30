@@ -21,7 +21,7 @@
  *
  * Usage:
  *   npm run build
- *   node server/server.mjs --port 8391 --data /tmp/dryrun --seed src/test --app dist/cavox/browser \
+ *   node server/server.mjs --port 8391 --data /tmp/dryrun --seed src/test --app dist/elic/browser \
  *     --project Demo1 --script playback --quiet &
  *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
  *     --remote-debugging-port=9333 --user-data-dir=/tmp/cdp-dry \

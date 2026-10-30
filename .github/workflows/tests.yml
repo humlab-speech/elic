@@ -533,7 +533,7 @@ jobs:
             echo "one thing this job exists to check (§11.245), so it fails here rather than five minutes into a session"; exit 1
           fi
           node server/server.mjs --port 8391 --data /tmp/dryrun --seed src/test \
-            --app dist/cavox/browser --project Demo1 --script playback --quiet > /tmp/receiver.log 2>&1 &
+            --app dist/elic/browser --project Demo1 --script playback --quiet > /tmp/receiver.log 2>&1 &
           google-chrome --headless=new --remote-debugging-port=9333 --user-data-dir=/tmp/cdp-dry \
             --use-fake-ui-for-media-stream --use-fake-device-for-media-stream \
             --autoplay-policy=no-user-gesture-required about:blank > /tmp/chrome.log 2>&1 &

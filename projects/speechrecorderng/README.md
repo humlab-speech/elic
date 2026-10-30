@@ -1,4 +1,4 @@
-# Cavox
+# Elic
 
 Capture your voice — a speech recording tool implemented as an Angular 20 module. This module is published as the `speechrecorderng` npm package.
 
@@ -364,7 +364,7 @@ Copy the dist folder to ```/wsr/ng/``` on your Web-Server and setup the fallback
    
 ### Server REST API
 
-Cavox requires a HTTP server providing a REST API. The server code is not part of this package.
+Elic requires a HTTP server providing a REST API. The server code is not part of this package.
 The package only contains a minimal file structure for testing. The files reside in `src/test`.
 
 Versions 2.x.x of the recorder (then WebSpeechRecorderNg) use the REST API version v1, Versions 3.x.x may use API version v1 and  v2. Set environment property apiVersion accordingly (default: `apiVersion: 1`) 
@@ -420,7 +420,7 @@ All library log output goes through a level gated logger. The level is configure
 * Recording files and their metadata are considered personal data; the server should apply access control, transport encryption and retention policies accordingly.
 * When recordings are stored client side in IndexedDB (`DB_CHUNKED` storage), they are plaintext by default. Set `encryptPersistentRecordings: true` in `SpeechRecorderConfig` to encrypt chunks at rest with AES-GCM (WebCrypto). The key is session scoped: a page reload in the same browser session can still decrypt, a browser restart cannot (stale encrypted chunks become unreadable and should be cleaned up server side). Playback and download of encrypted recordings work transparently.
 
-## Cavox REST API description
+## Elic REST API description
 
 The entities below are the model. The repository's `doc/script-editor/rest-api.md` is the complete endpoint
 reference — drafts, publishing and versions, banks and draws, media and the preview session — for a backend that
@@ -713,7 +713,7 @@ with every fallback above already applied. `ITEM_PHASES` and `nextPhase` are the
 
 ### Recording file
 
-Cavox stores the recording in browser memory first. The recordings are then uploaded to the server as binary encoded WAVE files.
+Elic stores the recording in browser memory first. The recordings are then uploaded to the server as binary encoded WAVE files.
 
 When `enableDownloadRecordings` is set, the completion dialog offers **Export recordings**: the
 session's client-side recordings are packed into a zip (one WAVE and one metadata file per
@@ -797,7 +797,7 @@ A recording is only marked as server persisted after the server acknowledges the
 ### Start a recording session
 
 The default routing path to start a recording session is `/spr/session/{sessionId}`. If you call this router link from your Angular application
-Cavox should start and will try to load the session data from the REST API first.
+Elic should start and will try to load the session data from the REST API first.
  
 ## GUI components to view and edit your recording database
 
